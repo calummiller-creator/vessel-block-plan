@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vessel Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f6f5f1;--surface:#ffffff;--border:#e2e0d8;--border-light:#eeece6;
+  --text:#1a1a18;--text-sec:#6b6a65;--text-tri:#9c9b95;
+  --font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--surface);color:var(--text);-webkit-font-smoothing:antialiased;overflow:hidden;}
+.app{width:100%;height:100vh;display:flex;flex-direction:column;}
+
+.toolbar{
+  display:flex;align-items:center;gap:6px;padding:5px 12px;
+  border-bottom:1px solid var(--border-light);background:#fafaf7;flex-shrink:0;
+}
+.toolbar-title{font-size:13px;font-weight:600;margin-right:4px;}
+.toolbar-sub{font-size:10px;color:var(--text-tri);margin-right:8px;}
+.toolbar-sep{width:1px;height:16px;background:var(--border);margin:0 2px;}
+.chip{
+  font-family:var(--font);font-size:10px;font-weight:500;padding:3px 9px;
+  border-radius:5px;border:1px solid var(--border);background:var(--surface);
+  color:var(--text-sec);cursor:pointer;transition:all 0.12s;white-space:nowrap;
+}
+.chip:hover{border-color:#ccc;color:var(--text);}
+.chip.active{background:var(--text);color:var(--surface);border-color:var(--text);}
+
+.main{flex:1;display:flex;overflow:hidden;}
+
+/* Map */
+#map{flex:1;z-index:1;}
+.leaflet-container{background:#e8e6df;}
+
+/* Right panel */
+.rpanel{
+  width:40%;min-width:400px;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;background:var(--surface);overflow:hidden;
+}
+.rpanel.collapsed{width:0;min-width:0;border-left:none;}
+.rpanel-header{
+  padding:8px 12px;border-bottom:1px solid var(--border-light);
+  display:flex;align-items:center;justify-content:space-between;
+  background:#fafaf7;flex-shrink:0;
+}
+.rpanel-title{font-size:12px;font-weight:600;}
+.rpanel-count{font-size:10px;color:var(--text-tri);font-family:var(--mono);}
+.rpanel-body{flex:1;overflow-y:auto;overflow-x:hidden;}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;}
+.tbl th{
+  position:sticky;top:0;background:#fafaf7;padding:5px 6px;text-align:left;
+  font-size:9px;font-weight:600;color:var(--text-tri);text-transform:uppercase;
+  letter-spacing:0.3px;border-bottom:1px solid var(--border);z-index:2;
+  overflow:hidden;
+}
+.tbl td{padding:5px 6px;border-bottom:1px solid var(--border-light);vertical-align:top;word-wrap:break-word;}
+.tbl td.nowrap{white-space:nowrap;}
+.tbl tr{cursor:pointer;transition:background 0.1s;}
+.tbl tr:hover{background:rgba(0,0,0,0.02);}
+.tbl tr.active-row{background:rgba(76,120,255,0.06);}
+.tbl .grp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle;}
+
+/* Info popup */
+.info-popup{
+  position:fixed;z-index:1000;background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.12);padding:14px 16px;
+  min-width:240px;max-width:320px;font-size:11px;
+  opacity:0;pointer-events:none;transition:opacity 0.15s;
+}
+.info-popup.open{opacity:1;pointer-events:auto;}
+.info-popup-title{font-size:13px;font-weight:600;margin-bottom:8px;padding-right:24px;}
+.info-popup-close{
+  position:absolute;top:8px;right:8px;width:22px;height:22px;
+  border-radius:4px;border:1px solid var(--border-light);background:var(--surface);
+  color:var(--text-sec);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:14px;font-family:var(--font);
+}
+.info-popup-close:hover{background:var(--bg);}
+.info-field{display:flex;justify-content:space-between;padding:3px 0;}
+.info-field-label{color:var(--text-tri);}
+.info-field-value{font-weight:500;color:var(--text);text-align:right;max-width:180px;}
+.info-colour-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;}
+
+/* Distance calc panel */
+.dist-panel{
+  padding:12px;border-top:1px solid var(--border);background:#fafaf7;flex-shrink:0;
+}
+.dist-panel.hidden{display:none;}
+.dist-title{font-size:11px;font-weight:600;margin-bottom:8px;}
+.dist-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+.dist-select{
+  flex:1;font-family:var(--font);font-size:10px;padding:4px 6px;
+  border:1px solid var(--border);border-radius:4px;background:var(--surface);
+  color:var(--text);
+}
+.dist-result{
+  font-size:11px;padding:8px;background:var(--surface);border-radius:5px;
+  border:1px solid var(--border-light);display:none;
+}
+.dist-result.show{display:block;}
+.dist-val{font-size:18px;font-weight:600;color:var(--text);}
+.dist-bearing{font-size:11px;color:var(--text-sec);margin-top:2px;}
+.dist-label{font-size:9px;color:var(--text-tri);text-transform:uppercase;letter-spacing:0.3px;}
+
+/* Selection box */
+.leaflet-selection-area{border:2px dashed #4c78ff;background:rgba(76,120,255,0.08);}
+
+/* Custom markers */
+.marker-campaign{
+  border:2px solid #fff;border-radius:50%;width:14px;height:14px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.25);
+}
+.marker-field{
+  width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(0,0,0,0.3);
+  opacity:0.6;
+}
+.marker-port{
+  width:10px;height:10px;border-radius:2px;border:1.5px solid #fff;
+  background:#e67e22;box-shadow:0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Campaign detail panel */
+.camp-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.2); z-index: 99; opacity: 0;
+  pointer-events: none; transition: opacity 0.25s;
+}
+.camp-overlay.open { opacity: 1; pointer-events: auto; }
+.camp-panel {
+  position: fixed; top: 0; right: -500px; width: 500px; height: 100vh;
+  background: var(--surface); border-left: 1px solid var(--border);
+  box-shadow: -8px 0 30px rgba(0,0,0,0.08); z-index: 100;
+  transition: right 0.25s cubic-bezier(0.4,0,0.2,1);
+  display: flex; flex-direction: column;
+}
+.camp-panel.open { right: 0; }
+.camp-hdr {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+}
+.camp-hdr h2 { font-size: 15px; font-weight: 600; }
+.camp-hdr .sub { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+.camp-close {
+  width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-sec); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  flex-shrink: 0; font-family: var(--font);
+}
+.camp-close:hover { background: var(--bg); }
+.camp-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+.camp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.camp-stat { background: var(--bg); border-radius: 6px; padding: 8px; }
+.camp-stat .lbl { font-size: 8px; color: var(--text-tri); text-transform: uppercase; letter-spacing: 0.3px; }
+.camp-stat .val { font-size: 15px; font-weight: 600; margin-top: 2px; }
+.camp-act {
+  padding: 8px 10px; margin-bottom: 4px; border-radius: 4px;
+  border-left: 3px solid var(--border); background: rgba(0,0,0,0.01); font-size: 11px;
+}
+.camp-act-title { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.camp-act-detail { color: var(--text-sec); font-size: 10px; }
+.camp-act-current { background: rgba(76,120,255,0.06); }
+
+@media (max-width: 900px) { .camp-panel { width: 100%; right: -100%; } }
+
+/* Legend */
+.map-legend{
+  position:absolute;bottom:20px;left:10px;z-index:500;
+  background:rgba(255,255,255,0.92);border:1px solid var(--border);
+  border-radius:6px;padding:8px 10px;font-size:9px;color:var(--text-sec);
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+.legend-row{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.legend-row:last-child{margin-bottom:0;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <span class="toolbar-title">Vessel positions</span>
+    <span class="toolbar-sub" id="toolbarContext"></span>
+    <div class="toolbar-sep"></div>
+    <button class="chip" id="showAreasChip" onclick="toggleAreas()">Areas</button>
+    <button class="chip active" id="showFieldsChip" onclick="toggleFields()">Fields</button>
+    <button class="chip active" id="showPortsChip" onclick="togglePorts()">Ports</button>
+    <button class="chip" id="distCalcChip" onclick="toggleDistCalc()">Distance calculator</button>
+    <button class="chip" id="selectChip" onclick="toggleSelectMode()">Select area</button>
+  </div>
+  <div class="main">
+    <div id="map"></div>
+    <div class="rpanel" id="rpanel">
+      <div class="rpanel-header">
+        <span class="rpanel-title">Campaigns</span>
+        <span class="rpanel-count" id="campaignCount"></span>
+      </div>
+      <div class="rpanel-body">
+        <table class="tbl">
+          <thead><tr><th style="width:30%;">Activity</th><th style="width:20%;">Vessel</th><th style="width:18%;">SPA</th><th style="width:10%;">Scope</th><th style="width:11%;">From</th><th style="width:11%;">To</th></tr></thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+      <div class="dist-panel hidden" id="distPanel">
+        <div class="dist-title">Distance Calculator</div>
+        <div class="dist-row">
+          <span style="font-size:9px;color:var(--text-tri);width:30px;">From</span>
+          <select class="dist-select" id="distFrom"><option value="">Select...</option></select>
+        </div>
+        <div class="dist-row">
+          <span style="font-size:9px;color:var(--text-tri);width:30px;">To</span>
+          <select class="dist-select" id="distTo"><option value="">Select...</option></select>
+        </div>
+        <div class="dist-row"><button class="chip" onclick="calcDistance()" style="width:100%;text-align:center;">Calculate</button></div>
+        <div class="dist-result" id="distResult">
+          <div class="dist-label">Distance</div>
+          <div class="dist-val" id="distValue"></div>
+          <div class="dist-bearing" id="distBearing"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="info-popup" id="infoPopup">
+  <button class="info-popup-close" onclick="closeInfoPopup()">&times;</button>
+  <div id="infoPopupContent"></div>
+</div>
+
+<div class="camp-overlay" id="campOverlay" onclick="closeCampPanel()"></div>
+<div class="camp-panel" id="campPanel">
+  <div class="camp-hdr">
+    <div><h2 id="campTitle"></h2><div class="sub" id="campSub"></div></div>
+    <button class="camp-close" onclick="closeCampPanel()">&times;</button>
+  </div>
+  <div class="camp-body" id="campBody"></div>
+</div>
+
+<div class="map-legend" id="mapLegend"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var SCOPE_COLORS={
+  'Drilling':{bg:'#c45222',light:'#fceee7'},'Well STIM/LWI':{bg:'#1a8c68',light:'#e4f5ee'},
+  'W2W':{bg:'#2196a3',light:'#e4f4f6'},'IRM':{bg:'#2d6cb4',light:'#e8f0fa'},
+  'Construction':{bg:'#7c5cbf',light:'#f0ecfa'},'DSV':{bg:'#b83f6b',light:'#fbe9f0'},
+  'Survey':{bg:'#607d8b',light:'#eceff1'},'Platform':{bg:'#7a7972',light:'#f0efeb'},
+  'Logistics':{bg:'#b8860b',light:'#faf3e0'},'Seismic Survey':{bg:'#5c6bc0',light:'#e8eaf6'}
+};
+var DEFAULT_COLOR={bg:'#888',light:'#f0f0f0'};
+var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function getColor(g){return SCOPE_COLORS[g]||DEFAULT_COLOR;}
+function escHtml(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';}
+function fmtDate(d){if(!d)return'';var dt=new Date(d);return dt.getDate()+' '+MONTHS[dt.getMonth()]+' '+dt.getFullYear();}
+function fmtDateShort(d){if(!d)return'';var dt=new Date(d);return dt.getDate()+' '+MONTHS[dt.getMonth()];}
+function daysBetween(a,b){if(!a||!b)return 0;return Math.round((new Date(b)-new Date(a))/86400000);}
+
+var showFieldMarkers=true,showAreaMarkers=false,showPortMarkers=true,showDistCalc=false,selectMode=false;
+var campaigns=[],fields=[],ports=[];
+var campaignMarkers=[],fieldMarkers=[],portMarkers=[],areaMarkers=[];
+var distLine=null,selectionRect=null,selStart=null;
+var allLocations=[];
+var map;
+
+// ── MAP INIT ──
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView([57.5,-1.5],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'&copy; OpenStreetMap',maxZoom:18
+  }).addTo(map);
+
+  // Selection box handlers
+  map.on('mousedown',function(e){
+    if(!selectMode)return;
+    selStart=e.latlng;
+    if(selectionRect){map.removeLayer(selectionRect);selectionRect=null;}
+  });
+  map.on('mousemove',function(e){
+    if(!selectMode||!selStart)return;
+    var bounds=L.latLngBounds(selStart,e.latlng);
+    if(selectionRect){selectionRect.setBounds(bounds);}
+    else{selectionRect=L.rectangle(bounds,{color:'#4c78ff',weight:2,dashArray:'6',fillOpacity:0.08}).addTo(map);}
+  });
+  map.on('mouseup',function(e){
+    if(!selectMode||!selStart)return;
+    var bounds=L.latLngBounds(selStart,e.latlng);
+    selStart=null;
+    filterByBounds(bounds);
+  });
+}
+
+// ── MARKERS ──
+function renderCampaigns(){
+  campaignMarkers.forEach(function(m){map.removeLayer(m);});
+  campaignMarkers=[];
+  var filtered=campaigns;
+
+  filtered.forEach(function(c){
+    if(!c.lat||!c.lng)return;
+    var col=getColor(c.grouping);
+    var icon=L.divIcon({
+      className:'',
+      html:'<div class="marker-campaign" style="background:'+col.bg+';"></div>',
+      iconSize:[14,14],iconAnchor:[7,7]
+    });
+    var m=L.marker([c.lat,c.lng],{icon:icon});
+    m._campaignData=c;
+    m.on('click',function(e){
+      L.DomEvent.stopPropagation(e);
+      showCampaignPopup(e.originalEvent,c);
+    });
+    m.bindTooltip(c.vessel+' — '+c.title,{direction:'top',offset:[0,-8],className:'leaflet-tooltip'});
+    m.addTo(map);
+    campaignMarkers.push(m);
+  });
+}
+
+function renderFields(){
+  fieldMarkers.forEach(function(m){map.removeLayer(m);});
+  fieldMarkers=[];
+  if(!showFieldMarkers)return;
+  fields.forEach(function(f){
+    if(!f.lat||!f.lng)return;
+    var icon=L.divIcon({
+      className:'',
+      html:'<div class="marker-field" style="background:#6b6a65;"></div><div style="position:absolute;left:12px;top:-4px;font-size:8px;font-family:var(--font);color:rgba(80,80,75,0.5);white-space:nowrap;pointer-events:none;">'+escHtml(f.title)+'</div>',
+      iconSize:[8,8],iconAnchor:[4,4]
+    });
+    var m=L.marker([f.lat,f.lng],{icon:icon});
+    m.bindTooltip(f.title+(f.asset?' ('+f.asset+')':'')+(f.area?' — '+f.area:''),{direction:'top',offset:[0,-5],permanent:false});
+    m.addTo(map);
+    fieldMarkers.push(m);
+  });
+}
+
+function renderAreas(){
+  areaMarkers.forEach(function(m){map.removeLayer(m);});
+  areaMarkers=[];
+  if(!showAreaMarkers)return;
+  // Group fields by area, compute average lat/lng
+  var areaMap={};
+  fields.forEach(function(f){
+    if(!f.lat||!f.lng)return;
+    var key=f.area||f.region||'Unknown';
+    if(!areaMap[key])areaMap[key]={name:key,lats:[],lngs:[],count:0};
+    areaMap[key].lats.push(f.lat);
+    areaMap[key].lngs.push(f.lng);
+    areaMap[key].count++;
+  });
+  Object.keys(areaMap).forEach(function(k){
+    var a=areaMap[k];
+    var avgLat=a.lats.reduce(function(s,v){return s+v;},0)/a.count;
+    var avgLng=a.lngs.reduce(function(s,v){return s+v;},0)/a.count;
+    var icon=L.divIcon({
+      className:'',
+      html:'<div style="background:rgba(107,106,101,0.15);border:1.5px solid rgba(107,106,101,0.4);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;font-family:var(--font);color:#4a4a45;">'+a.count+'</div><div style="position:absolute;left:24px;top:2px;font-size:9px;font-family:var(--font);font-weight:600;color:rgba(60,60,55,0.6);white-space:nowrap;pointer-events:none;">'+escHtml(a.name)+'</div>',
+      iconSize:[20,20],iconAnchor:[10,10]
+    });
+    var m=L.marker([avgLat,avgLng],{icon:icon});
+    m.bindTooltip(a.name+' ('+a.count+' fields)',{direction:'top',offset:[0,-12]});
+    m.addTo(map);
+    areaMarkers.push(m);
+  });
+}
+
+function renderPorts(){
+  portMarkers.forEach(function(m){map.removeLayer(m);});
+  portMarkers=[];
+  if(!showPortMarkers)return;
+  ports.forEach(function(p){
+    if(!p.lat||!p.lng)return;
+    var icon=L.divIcon({
+      className:'',
+      html:'<div class="marker-port"></div>',
+      iconSize:[10,10],iconAnchor:[5,5]
+    });
+    var m=L.marker([p.lat,p.lng],{icon:icon});
+    m.bindTooltip(p.title,{direction:'top',offset:[0,-6],permanent:false});
+    m.addTo(map);
+    portMarkers.push(m);
+  });
+}
+
+// ── TABLE ──
+function renderTable(list){
+  var body=document.getElementById('tblBody');
+  body.innerHTML='';
+  var items=list||campaigns;
+
+  // Sort by field then by from date
+  var sorted=items.slice().sort(function(a,b){
+    var fa=(a.field||a.asset||'').toLowerCase();
+    var fb=(b.field||b.asset||'').toLowerCase();
+    if(fa!==fb)return fa.localeCompare(fb);
+    return (a.from||'').localeCompare(b.from||'');
+  });
+
+  // Count distinct campaigns
+  var uniqueCampaigns={};
+  sorted.forEach(function(c){
+    var key=c.parentCampaign||c.title||'';
+    uniqueCampaigns[key]=true;
+  });
+  document.getElementById('campaignCount').textContent=Object.keys(uniqueCampaigns).length+' campaigns';
+
+  var currentField=null;
+  sorted.forEach(function(c,i){
+    var fieldName=c.field||c.asset||'Unknown';
+    // Field section header
+    if(fieldName!==currentField){
+      currentField=fieldName;
+      var hdr=document.createElement('tr');
+      hdr.innerHTML='<td colspan="6" style="background:#eeedea;font-size:10px;font-weight:600;color:var(--text-sec);padding:5px 6px;border-bottom:1px solid var(--border);">'+escHtml(fieldName)+'</td>';
+      body.appendChild(hdr);
+    }
+    var col=getColor(c.grouping);
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+escHtml(c.title)+'</td>'+
+      '<td>'+escHtml(c.vessel)+'</td>'+
+      '<td>'+escHtml(c.spa)+'</td>'+
+      '<td><span class="grp-dot" style="background:'+col.bg+';"></span>'+escHtml(c.grouping)+'</td>'+
+      '<td class="nowrap" style="font-family:var(--mono);font-size:9px;">'+fmtDateShort(c.from)+'</td>'+
+      '<td class="nowrap" style="font-family:var(--mono);font-size:9px;">'+fmtDateShort(c.to)+'</td>';
+    tr.addEventListener('click',function(ev){showCampaignPopup(ev,c);highlightMarker(c);});
+    body.appendChild(tr);
+  });
+}
+
+function highlightMarker(c){
+  if(!c.lat||!c.lng)return;
+  map.setView([c.lat,c.lng],Math.max(map.getZoom(),9));
+  campaignMarkers.forEach(function(m){
+    if(m._campaignData===c){m.openTooltip();}
+  });
+}
+
+// ── SELECTION BOX FILTER ──
+function filterByBounds(bounds){
+  var filtered=campaigns.filter(function(c){
+    return c.lat&&c.lng&&bounds.contains(L.latLng(c.lat,c.lng));
+  });
+  renderTable(filtered);
+  // Highlight selected markers
+  campaignMarkers.forEach(function(m){
+    var d=m._campaignData;
+    if(d&&d.lat&&d.lng&&bounds.contains(L.latLng(d.lat,d.lng))){
+      m.setOpacity(1);
+    }else{
+      m.setOpacity(0.2);
+    }
+  });
+}
+
+function clearSelection(){
+  if(selectionRect){map.removeLayer(selectionRect);selectionRect=null;}
+  campaignMarkers.forEach(function(m){m.setOpacity(1);});
+  renderTable();
+}
+
+// ── CAMPAIGN POPUP ──
+var campaignRoute=null;
+
+function showCampaignPopup(event,c){
+  var popup=document.getElementById('infoPopup');
+  var content=document.getElementById('infoPopupContent');
+  var col=getColor(c.grouping);
+  var dur=daysBetween(c.from,c.to);
+  var html='<div class="info-popup-title">'+escHtml(c.title)+'</div>';
+  html+=infoField('Vessel',c.vessel);
+  html+=infoField('Grouping','<span class="info-colour-dot" style="background:'+col.bg+'"></span>'+escHtml(c.grouping));
+  html+=infoField('Status',c.status);
+  html+=infoField('Region',c.region);
+  html+=infoField('Area',c.area);
+  html+=infoField('Asset',c.asset);
+  if(c.field)html+=infoField('Field',c.field);
+  html+=infoField('SPA',c.spa);
+  html+=infoField('Organisation',c.organisation);
+  html+=infoField('From',fmtDate(c.from));
+  html+=infoField('To',fmtDate(c.to));
+  html+=infoField('Duration',dur+' days');
+  if(c.parentCampaign)html+=infoField('Campaign',c.parentCampaign);
+  if(c.lat&&c.lng)html+=infoField('Position',c.lat.toFixed(4)+'°N, '+Math.abs(c.lng).toFixed(4)+'°'+(c.lng>=0?'E':'W'));
+
+  if(c.parentCampaign){
+    var pcName=c.parentCampaign.replace(/'/g,"\\'");
+    html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-light);"><button class="chip" style="width:100%;text-align:center;font-size:10px;padding:5px;" onclick="closeInfoPopup();openCampPanel(\''+pcName+'\')">View campaign detail \u25B8</button></div>';
+  }
+
+  content.innerHTML=html;
+
+  // Show campaign route if part of a parent campaign
+  clearCampaignRoute();
+  if(c.parentCampaign){
+    var siblings=campaigns.filter(function(s){return s.parentCampaign===c.parentCampaign&&s.lat&&s.lng;});
+    siblings.sort(function(a,b){return(a.from||'').localeCompare(b.from||'');});
+    if(siblings.length>1){
+      var pts=siblings.map(function(s){return[s.lat,s.lng];});
+      // Remove consecutive duplicate points
+      var uniquePts=[pts[0]];
+      for(var i=1;i<pts.length;i++){
+        if(pts[i][0]!==pts[i-1][0]||pts[i][1]!==pts[i-1][1])uniquePts.push(pts[i]);
+      }
+      if(uniquePts.length>1){
+        campaignRoute=L.layerGroup();
+        // Route line
+        L.polyline(uniquePts,{color:col.bg,weight:2.5,dashArray:'6,4',opacity:0.6}).addTo(campaignRoute);
+        // Numbered markers at each stop
+        siblings.forEach(function(s,si){
+          var isCurrent=(s===c);
+          var marker=L.circleMarker([s.lat,s.lng],{
+            radius:isCurrent?8:5,color:isCurrent?col.bg:'#666',
+            fillColor:isCurrent?col.bg:'#fff',fillOpacity:isCurrent?1:0.8,weight:isCurrent?2:1.5
+          });
+          marker.bindTooltip((si+1)+'. '+s.title+' ('+fmtDateShort(s.from)+' – '+fmtDateShort(s.to)+')',{permanent:false,direction:'top'});
+          marker.addTo(campaignRoute);
+        });
+        campaignRoute.addTo(map);
+      }
+    }
+  }
+
+  popup.classList.add('open');
+  popupJustOpened=true;
+  var pw=popup.offsetWidth,ph=popup.offsetHeight;
+  var x=event.clientX+12,y=event.clientY-20;
+  if(x+pw>window.innerWidth-10)x=event.clientX-pw-12;
+  if(y+ph>window.innerHeight-10)y=window.innerHeight-ph-10;
+  if(y<10)y=10;
+  popup.style.left=x+'px';popup.style.top=y+'px';
+}
+
+function clearCampaignRoute(){
+  if(campaignRoute){map.removeLayer(campaignRoute);campaignRoute=null;}
+}
+
+function infoField(label,value){
+  if(!value&&value!==0)return'';
+  return'<div class="info-field"><span class="info-field-label">'+escHtml(label)+'</span><span class="info-field-value">'+value+'</span></div>';
+}
+function closeInfoPopup(){document.getElementById('infoPopup').classList.remove('open');clearCampaignRoute();}
+
+function openCampPanel(parentName){
+  var siblings=campaigns.filter(function(s){return s.parentCampaign===parentName;});
+  if(siblings.length===0)return;
+  siblings.sort(function(a,b){return(a.from||'').localeCompare(b.from||'');});
+
+  var col=getColor(siblings[0].grouping);
+  var vessels={};
+  siblings.forEach(function(s){if(s.vessel)vessels[s.vessel]=true;});
+
+  document.getElementById('campTitle').textContent=parentName;
+  document.getElementById('campSub').textContent=Object.keys(vessels).join(', ')+' \u2014 '+siblings.length+' activities';
+
+  var body=document.getElementById('campBody');
+  var totalDays=0;
+  siblings.forEach(function(s){totalDays+=daysBetween(s.from,s.to);});
+  var firstFrom=siblings[0].from;
+  var lastTo=siblings[siblings.length-1].to;
+  var spanDays=daysBetween(firstFrom,lastTo);
+
+  var html='<div class="camp-stats">';
+  html+='<div class="camp-stat"><div class="lbl">Span</div><div class="val">'+spanDays+'d</div></div>';
+  html+='<div class="camp-stat"><div class="lbl">Activities</div><div class="val">'+siblings.length+'</div></div>';
+  html+='<div class="camp-stat"><div class="lbl">Total days</div><div class="val">'+totalDays+'d</div></div>';
+  html+='</div>';
+
+  siblings.forEach(function(s,si){
+    var sc=getColor(s.grouping);
+    var dur=daysBetween(s.from,s.to);
+    html+='<div class="camp-act" style="border-left-color:'+sc.bg+';">';
+    html+='<div class="camp-act-title">'+(si+1)+'. '+escHtml(s.title)+'</div>';
+    html+='<div class="camp-act-detail">';
+    html+=escHtml(s.field||s.asset||'')+' \u00B7 '+escHtml(s.vessel)+' \u00B7 '+fmtDate(s.from)+' \u2192 '+fmtDate(s.to)+' ('+dur+'d)';
+    html+='</div>';
+    html+='<div class="camp-act-detail">';
+    html+='<span class="info-colour-dot" style="background:'+sc.bg+';"></span>'+escHtml(s.grouping)+' \u00B7 '+escHtml(s.spa)+' \u00B7 '+escHtml(s.organisation);
+    html+='</div>';
+    html+='</div>';
+  });
+
+  body.innerHTML=html;
+  document.getElementById('campPanel').classList.add('open');
+  document.getElementById('campOverlay').classList.add('open');
+}
+
+function closeCampPanel(){
+  document.getElementById('campPanel').classList.remove('open');
+  document.getElementById('campOverlay').classList.remove('open');
+}
+
+// ── DISTANCE CALCULATOR ──
+function populateDistDropdowns(){
+  allLocations=[];
+  fields.forEach(function(f){
+    if(f.lat&&f.lng)allLocations.push({name:f.title,group:f.area||f.region||'Fields',lat:f.lat,lng:f.lng,type:'field',region:f.region,area:f.area,asset:f.asset});
+  });
+  ports.forEach(function(p){
+    if(p.lat&&p.lng)allLocations.push({name:p.title,group:p.area||'Ports',lat:p.lat,lng:p.lng,type:'port'});
+  });
+
+  // Remove dupes by name
+  var seen={};
+  allLocations=allLocations.filter(function(l){if(seen[l.name])return false;seen[l.name]=true;return true;});
+
+  // Group by type then by group
+  var fieldGroups={},portGroups={};
+  allLocations.forEach(function(l,i){
+    l._idx=i;
+    if(l.type==='field'){
+      var gk=(l.region||'')+'|'+(l.area||'')+'|'+(l.asset||'');
+      var gn=(l.asset?l.asset+' — ':'')+(l.area||l.region||'Fields');
+      if(!fieldGroups[gk])fieldGroups[gk]={label:gn,items:[]};
+      fieldGroups[gk].items.push(l);
+    }else{
+      var pk=l.group;
+      if(!portGroups[pk])portGroups[pk]={label:pk,items:[]};
+      portGroups[pk].items.push(l);
+    }
+  });
+
+  var fromSel=document.getElementById('distFrom');
+  var toSel=document.getElementById('distTo');
+  var optHtml='<option value="">Select...</option>';
+
+  // Ports first
+  var portKeys=Object.keys(portGroups).sort();
+  if(portKeys.length>0){
+    portKeys.forEach(function(k){
+      var g=portGroups[k];
+      optHtml+='<optgroup label="⚓ '+escHtml(g.label)+'">';
+      g.items.sort(function(a,b){return a.name.localeCompare(b.name);});
+      g.items.forEach(function(l){optHtml+='<option value="'+l._idx+'">'+escHtml(l.name)+'</option>';});
+      optHtml+='</optgroup>';
+    });
+  }
+
+  // Fields grouped by region/area/asset
+  var fieldKeys=Object.keys(fieldGroups).sort();
+  if(fieldKeys.length>0){
+    fieldKeys.forEach(function(k){
+      var g=fieldGroups[k];
+      optHtml+='<optgroup label="○ '+escHtml(g.label)+'">';
+      g.items.sort(function(a,b){return a.name.localeCompare(b.name);});
+      g.items.forEach(function(l){optHtml+='<option value="'+l._idx+'">'+escHtml(l.name)+'</option>';});
+      optHtml+='</optgroup>';
+    });
+  }
+
+  fromSel.innerHTML=optHtml;
+  toSel.innerHTML=optHtml;
+}
+
+function calcDistance(){
+  var fi=document.getElementById('distFrom').value;
+  var ti=document.getElementById('distTo').value;
+  if(fi===''||ti==='')return;
+  var from=allLocations[parseInt(fi)];
+  var to=allLocations[parseInt(ti)];
+  if(!from||!to)return;
+
+  // Haversine distance in nautical miles
+  var R=3440.065; // Earth radius in NM
+  var lat1=from.lat*Math.PI/180,lat2=to.lat*Math.PI/180;
+  var dlat=(to.lat-from.lat)*Math.PI/180;
+  var dlng=(to.lng-from.lng)*Math.PI/180;
+  var a=Math.sin(dlat/2)*Math.sin(dlat/2)+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlng/2)*Math.sin(dlng/2);
+  var c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  var dist=R*c;
+
+  // Bearing
+  var y=Math.sin(dlng)*Math.cos(lat2);
+  var x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dlng);
+  var bearing=(Math.atan2(y,x)*180/Math.PI+360)%360;
+
+  // Cardinal direction
+  var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  var cardinal=dirs[Math.round(bearing/22.5)%16];
+
+  var distKm=dist*1.852;
+  document.getElementById('distValue').textContent=dist.toFixed(1)+' NM ('+distKm.toFixed(1)+' km)';
+  document.getElementById('distBearing').textContent=bearing.toFixed(1)+'° ('+cardinal+') — '+escHtml(from.name)+' → '+escHtml(to.name);
+  document.getElementById('distResult').classList.add('show');
+
+  // Draw line on map
+  if(distLine){map.removeLayer(distLine);}
+  distLine=L.polyline([[from.lat,from.lng],[to.lat,to.lng]],{color:'#4c78ff',weight:2,dashArray:'8,4',opacity:0.7}).addTo(map);
+  map.fitBounds(distLine.getBounds().pad(0.3));
+}
+
+// ── TOGGLES ──
+function toggleAreas(){
+  showAreaMarkers=!showAreaMarkers;
+  document.getElementById('showAreasChip').classList.toggle('active');
+  if(showAreaMarkers&&showFieldMarkers){
+    showFieldMarkers=false;
+    document.getElementById('showFieldsChip').classList.remove('active');
+    renderFields();
+  }
+  renderAreas();
+}
+function toggleFields(){
+  showFieldMarkers=!showFieldMarkers;
+  document.getElementById('showFieldsChip').classList.toggle('active');
+  if(showFieldMarkers&&showAreaMarkers){
+    showAreaMarkers=false;
+    document.getElementById('showAreasChip').classList.remove('active');
+    renderAreas();
+  }
+  renderFields();
+}
+function togglePorts(){showPortMarkers=!showPortMarkers;document.getElementById('showPortsChip').classList.toggle('active');renderPorts();}
+function toggleDistCalc(){
+  showDistCalc=!showDistCalc;
+  document.getElementById('distCalcChip').classList.toggle('active');
+  document.getElementById('distPanel').classList.toggle('hidden');
+  if(!showDistCalc&&distLine){map.removeLayer(distLine);distLine=null;}
+}
+function toggleSelectMode(){
+  selectMode=!selectMode;
+  document.getElementById('selectChip').classList.toggle('active');
+  if(selectMode){
+    map.dragging.disable();
+    map.getContainer().style.cursor='crosshair';
+  }else{
+    map.dragging.enable();
+    map.getContainer().style.cursor='';
+    clearSelection();
+  }
+}
+
+// ── LEGEND ──
+function buildLegend(){
+  var lg=document.getElementById('mapLegend');
+  var html='';
+  Object.keys(SCOPE_COLORS).forEach(function(k){
+    html+='<div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:'+SCOPE_COLORS[k].bg+';border:1.5px solid #fff;box-shadow:0 0 2px rgba(0,0,0,0.2);"></div>'+k+'</div>';
+  });
+  html+='<div class="legend-row"><div style="width:8px;height:8px;border-radius:50%;background:#6b6a65;opacity:0.6;border:1px solid rgba(0,0,0,0.2);"></div>Field/Asset</div>';
+  html+='<div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:rgba(107,106,101,0.15);border:1.5px solid rgba(107,106,101,0.4);font-size:6px;display:flex;align-items:center;justify-content:center;">n</div>Area (avg)</div>';
+  html+='<div class="legend-row"><div style="width:9px;height:9px;border-radius:2px;background:#e67e22;border:1px solid #fff;"></div>Port</div>';
+  lg.innerHTML=html;
+}
+
+// ── DATA RECEIVER ──
+function loadData(payload){
+  if(payload.campaigns)campaigns=payload.campaigns;
+  if(payload.fields)fields=payload.fields;
+  if(payload.ports)ports=payload.ports;
+  if(payload.context)document.getElementById('toolbarContext').textContent=payload.context;
+
+  renderCampaigns();
+  renderFields();
+  renderAreas();
+  renderPorts();
+  renderTable();
+  populateDistDropdowns();
+
+  // Fit bounds to campaign markers
+  if(campaigns.length>0){
+    var pts=campaigns.filter(function(c){return c.lat&&c.lng;}).map(function(c){return[c.lat,c.lng];});
+    if(pts.length>0)map.fitBounds(pts,{padding:[30,30],maxZoom:10});
+  }
+}
+
+window.addEventListener('message',function(event){
+  try{
+    var payload=event.data;
+    if(typeof payload==='string')payload=JSON.parse(payload);
+    loadData(payload);
+  }catch(e){console.error('Map data error:',e);}
+});
+
+var popupJustOpened=false;
+document.addEventListener('click',function(e){
+  var popup=document.getElementById('infoPopup');
+  if(popupJustOpened){popupJustOpened=false;return;}
+  if(popup.classList.contains('open')&&!popup.contains(e.target)){closeInfoPopup();}
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){closeInfoPopup();closeCampPanel();if(selectMode){toggleSelectMode();}}
+});
+
+// Init
+initMap();
+buildLegend();
+
+// Standalone test data
+if(typeof window.TEST_DATA!=='undefined'){loadData(window.TEST_DATA);}
+</script>
+</body>
+</html>
