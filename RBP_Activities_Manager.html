@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RBP Activities Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f5f1;--surface:#ffffff;--border:#e2e0d8;--border-light:#eeece6;--text:#1a1a18;--text-sec:#6b6a65;--text-tri:#9c9b95;--accent:#2d6cb4;--accent-light:#e8f0fa;--green:#1a8c68;--green-light:#e4f5ee;--orange:#c45222;--red:#d44040;--red-light:#fde8e8;--font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;height:100vh;overflow:hidden;}
+.app{height:100vh;display:flex;flex-direction:column;}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header h1{font-size:18px;font-weight:700;letter-spacing:-0.3px;}
+.header-actions{display:flex;gap:8px;}
+
+.btn{font-family:var(--font);font-size:11px;font-weight:600;padding:6px 14px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.12s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.btn:hover{border-color:#bbb;background:#f0efeb;}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-primary:hover{background:#245a9a;}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green);}
+.btn-green:hover{background:#157555;}
+.btn-sm{font-size:10px;padding:4px 10px;}
+.btn-icon{width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.btn-danger{color:var(--red);border-color:var(--red);}
+.btn-danger:hover{background:var(--red-light);}
+.btn-back{font-size:12px;padding:5px 12px;gap:4px;}
+
+.region-select{font-family:var(--font);font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;background:#2c2c2c;color:#fff;border:1px solid #2c2c2c;cursor:pointer;}
+
+.filter-bar{display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border-light);background:#fafaf7;flex-shrink:0;flex-wrap:wrap;align-items:center;}
+.filter-bar label{font-size:9px;font-weight:600;color:var(--text-tri);text-transform:uppercase;letter-spacing:0.3px;}
+.filter-input{font-family:var(--font);font-size:10px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);width:120px;}
+.filter-input:focus{outline:none;border-color:var(--accent);}
+.filter-select{font-family:var(--font);font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);}
+.filter-clear{font-size:9px;color:var(--accent);cursor:pointer;border:none;background:none;font-family:var(--font);font-weight:600;}
+
+/* Multi-select filter dropdowns */
+.multi-filter{position:relative;}
+.mf-btn{font-family:var(--font);font-size:10px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text-sec);cursor:pointer;white-space:nowrap;}
+.mf-btn:hover{border-color:#bbb;}
+.mf-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-light);}
+.mf-count{font-family:var(--mono);font-size:8px;background:var(--accent);color:#fff;padding:0 4px;border-radius:8px;margin-left:2px;display:none;}
+.mf-count.show{display:inline;}
+.mf-drop{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,0.1);z-index:20;min-width:160px;max-height:240px;overflow-y:auto;padding:4px;}
+.mf-drop.open{display:block;}
+.mf-opt{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:10px;cursor:pointer;border-radius:3px;}
+.mf-opt:hover{background:var(--bg);}
+.mf-opt input{margin:0;}
+.mf-opt.checked{color:var(--accent);font-weight:600;}
+
+/* Sortable headers */
+.tbl th.sortable{cursor:pointer;user-select:none;}
+.tbl th.sortable:hover{color:var(--accent);}
+.tbl th .sort-icon{font-size:8px;margin-left:2px;color:var(--text-tri);}
+.tbl th.sort-asc .sort-icon::after{content:' ▲';}
+.tbl th.sort-desc .sort-icon::after{content:' ▼';}
+
+.tabs{display:flex;gap:0;padding:0 20px;border-bottom:2px solid var(--border);background:var(--surface);flex-shrink:0;}
+.tab{font-family:var(--font);font-size:12px;font-weight:500;padding:8px 16px;border:none;background:transparent;color:var(--text-sec);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.tab .count{font-size:10px;font-family:var(--mono);background:var(--border-light);padding:1px 5px;border-radius:3px;margin-left:4px;}
+.tab.active .count{background:var(--accent-light);color:var(--accent);}
+
+.table-wrap{flex:1;overflow:auto;padding:0 20px 20px;}
+.tbl{width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.tbl th{padding:7px 8px;text-align:left;font-size:8px;font-weight:600;color:var(--text-tri);text-transform:uppercase;letter-spacing:0.3px;background:#fafaf7;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--border-light);vertical-align:middle;white-space:nowrap;}
+.tbl tr{transition:background 0.08s;}
+.tbl tr:hover{background:rgba(45,108,180,0.02);}
+.tbl tr.l1-row{background:#fafaf7;}
+
+.level-badge{font-size:7px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:0.3px;font-family:var(--mono);}
+.level-standalone{background:#f0efeb;color:var(--text-sec);}
+.level-l1{background:var(--accent-light);color:var(--accent);}
+.grp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle;}
+.status-pill{font-size:8px;padding:2px 6px;border-radius:3px;font-weight:500;}
+.status-confirmed{background:#e4f5ee;color:#1a8c68;}
+.status-awaiting{background:#fef3cd;color:#856404;}
+.status-ongoing{background:var(--accent-light);color:var(--accent);}
+.date-cell{font-family:var(--mono);font-size:9px;color:var(--text-sec);}
+.expand-btn{font-size:9px;cursor:pointer;color:var(--accent);background:none;border:none;font-family:var(--font);font-weight:600;padding:2px 6px;border-radius:3px;}
+.expand-btn:hover{background:var(--accent-light);}
+
+/* L2 Full Page */
+.l2-page{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:50;display:none;flex-direction:column;}
+.l2-page.open{display:flex;}
+.l2-page-header{display:flex;align-items:flex-start;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.l2-page-header h2{font-size:16px;font-weight:700;}
+.l2-page-header .sub{font-size:11px;color:var(--text-sec);margin-top:2px;}
+.l2-page-header .meta{font-size:10px;color:var(--text-tri);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;}
+.l2-toolbar{padding:8px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:8px;background:#fafaf7;flex-shrink:0;}
+.l2-body{flex:1;overflow:auto;padding:0 20px 20px;}
+.l2-table{width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.l2-table th{padding:6px 6px;text-align:left;font-size:8px;font-weight:600;color:var(--text-tri);text-transform:uppercase;letter-spacing:0.3px;background:#fafaf7;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;}
+.l2-table td{padding:4px 6px;border-bottom:1px solid var(--border-light);vertical-align:middle;}
+.l2-table tr:hover{background:rgba(45,108,180,0.02);}
+.l2-footer{padding:10px 20px;border-top:1px solid var(--border);background:#fafaf7;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.l2-footer .auto-dates{font-size:10px;color:var(--text-tri);font-style:italic;}
+
+.seq-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:8px;font-weight:700;font-family:var(--mono);}
+.chain-arrow{color:var(--text-tri);font-size:9px;}
+.duration-input{width:44px;font-family:var(--mono);font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;text-align:center;}
+.duration-input:focus{outline:none;border-color:var(--accent);}
+.l2-input{font-family:var(--font);font-size:9px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);width:100%;}
+.l2-input:focus{outline:none;border-color:var(--accent);}
+.l2-input.diff{color:var(--accent);font-weight:600;}
+.l2-select{font-family:var(--font);font-size:9px;padding:4px 4px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);width:100%;min-height:24px;cursor:pointer;}
+
+.paste-area{margin:8px 0;border:2px dashed var(--border);border-radius:6px;padding:14px;text-align:center;color:var(--text-tri);font-size:11px;display:none;}
+.paste-area.show{display:block;}
+.paste-area textarea{width:100%;height:70px;margin-top:6px;font-family:var(--mono);font-size:9px;padding:6px;border:1px solid var(--border);border-radius:4px;resize:vertical;}
+
+/* Modal */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:100;opacity:0;pointer-events:none;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center;}
+.modal-overlay.open{opacity:1;pointer-events:auto;}
+.modal{background:var(--surface);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.15);width:560px;max-height:85vh;overflow-y:auto;padding:24px;}
+.modal h2{font-size:16px;font-weight:700;margin-bottom:16px;}
+.form-row{display:flex;gap:10px;margin-bottom:10px;}
+.form-group{flex:1;}
+.form-label{display:block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-tri);margin-bottom:3px;}
+.form-input{width:100%;font-family:var(--font);font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);}
+.form-input:focus{outline:none;border-color:var(--accent);}
+.form-select{width:100%;font-family:var(--font);font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-light);}
+
+.toast{position:fixed;bottom:20px;right:20px;background:#2c2c2c;color:#fff;padding:10px 16px;border-radius:6px;font-size:11px;font-weight:500;z-index:200;opacity:0;transform:translateY(10px);transition:all 0.2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* SPA search autocomplete */
+.spa-results{display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,0.1);z-index:30;max-height:200px;overflow-y:auto;margin-top:2px;}
+.spa-results.open{display:block;}
+.spa-result{padding:6px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border-light);}
+.spa-result:hover{background:var(--accent-light);}
+.spa-result:last-child{border-bottom:none;}
+.spa-result .spa-name{font-weight:600;color:var(--text);}
+.spa-result .spa-email{font-size:9px;color:var(--text-tri);margin-top:1px;}
+.spa-result .spa-dept{font-size:9px;color:var(--text-sec);}
+.spa-searching{padding:8px 10px;font-size:10px;color:var(--text-tri);text-align:center;}
+
+/* L2 SPA search */
+.l2-spa-wrap{position:relative;}
+.l2-spa-results{display:none;position:absolute;top:100%;left:0;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,0.1);z-index:30;max-height:160px;overflow-y:auto;margin-top:2px;}
+.l2-spa-results.open{display:block;}
+</style>
+</head>
+<body>
+<div class="app" id="mainPage">
+  <div class="header">
+    <div class="header-left">
+      <h1>RBP Activities</h1>
+      <select class="region-select" id="regionSelect" onchange="changeRegion(this.value)">
+        <option value="North Sea">North Sea</option>
+        <option value="M&S" selected>M&amp;S</option>
+        <option value="Egypt">Egypt</option>
+      </select>
+    </div>
+    <div class="header-actions">
+      <a href="#" id="pbiLink" class="btn" target="_blank" style="text-decoration:none;">📊 Block Plan</a>
+      <button class="btn btn-primary" onclick="openAddModal('Standalone')">+ Standalone</button>
+      <button class="btn btn-primary" onclick="openAddModal('L1')">+ Campaign</button>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <label>Filter:</label>
+    <input class="filter-input" id="filterSearch" placeholder="Search title / vessel..." oninput="render()">
+    <div class="multi-filter" id="mfArea"><button class="mf-btn" onclick="toggleMF('mfArea')">Area <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <div class="multi-filter" id="mfAsset"><button class="mf-btn" onclick="toggleMF('mfAsset')">Asset <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <div class="multi-filter" id="mfGrouping"><button class="mf-btn" onclick="toggleMF('mfGrouping')">Grouping <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <div class="multi-filter" id="mfSPA"><button class="mf-btn" onclick="toggleMF('mfSPA')">SPA <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <div class="multi-filter" id="mfStatus"><button class="mf-btn" onclick="toggleMF('mfStatus')">Status <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <div class="multi-filter" id="mfOrg"><button class="mf-btn" onclick="toggleMF('mfOrg')">Org <span class="mf-count"></span></button><div class="mf-drop"></div></div>
+    <button class="filter-clear" onclick="clearFilters()">Clear all</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabAll" onclick="setTab('all')">All<span class="count" id="countAll"></span></button>
+    <button class="tab" id="tabCampaigns" onclick="setTab('campaigns')">Campaigns<span class="count" id="countCampaigns"></span></button>
+    <button class="tab" id="tabStandalone" onclick="setTab('standalone')">Standalone<span class="count" id="countStandalone"></span></button>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <thead><tr>
+        <th>Level</th>
+        <th class="sortable" onclick="sortBy('title')">Title<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('area')">Area<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('asset')">Asset<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('vessel')">Vessel<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('grouping')">Grouping<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('spa')">SPA<span class="sort-icon"></span></th>
+        <th>Org</th>
+        <th>Status</th>
+        <th class="sortable" onclick="sortBy('from')">From<span class="sort-icon"></span></th>
+        <th class="sortable" onclick="sortBy('to')">To<span class="sort-icon"></span></th>
+        <th>Win From</th><th>Win To</th>
+        <th>L2</th><th></th>
+      </tr></thead>
+      <tbody id="mainBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- L2 Full Page -->
+<div class="l2-page" id="l2Page">
+  <div class="l2-page-header">
+    <div>
+      <button class="btn btn-back" onclick="closeL2Page()">&#8592; Back</button>
+      <h2 id="l2Title" style="margin-top:6px;"></h2>
+      <div class="sub" id="l2Sub"></div>
+      <div class="meta" id="l2Meta"></div>
+    </div>
+    <div style="text-align:right;">
+      <span style="font-size:10px;color:var(--text-tri);font-family:var(--mono);" id="l2Count"></span>
+    </div>
+  </div>
+  <div class="l2-toolbar">
+    <button class="btn btn-green btn-sm" onclick="addL2Row()">+ Add activity</button>
+    <button class="btn btn-sm" onclick="togglePaste()">Paste from Excel</button>
+  </div>
+  <div class="paste-area" id="pasteArea">
+    <div>Paste tab-separated rows from Excel with columns in this order:</div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--text-sec);margin:4px 0;">Title | SubType | Area | Asset | Field | Duration | Vessel | MMSI | SPA | Grouping | Org | Status | P/E</div>
+    <div style="font-size:9px;color:var(--text-tri);margin-bottom:4px;">Only Title and Duration are required. Other columns default from L1 if blank.</div>
+    <div style="margin-bottom:6px;"><button class="btn btn-sm" onclick="copyPasteExample()">Copy example to clipboard</button></div>
+    <textarea id="pasteInput" placeholder="Mob from Port&#9;Transit&#9;GTA&#9;GTA&#9;Nouakchott&#9;2&#10;Hub Inspection&#9;Work&#9;GTA&#9;GTA&#9;GTA Hub&#9;5"></textarea>
+    <div style="margin-top:6px;"><button class="btn btn-green btn-sm" onclick="processPaste()">Import rows</button></div>
+  </div>
+  <div class="l2-body">
+    <table class="l2-table">
+      <thead><tr>
+        <th style="width:2%;">#</th>
+        <th style="width:11%;">Title</th>
+        <th style="width:6%;">SubType</th>
+        <th style="width:6%;">Area</th>
+        <th style="width:6%;">Asset</th>
+        <th style="width:6%;">Field</th>
+        <th style="width:4%;">Days</th>
+        <th style="width:5%;">From</th>
+        <th style="width:2%;"></th>
+        <th style="width:5%;">To</th>
+        <th style="width:7%;">Vessel</th>
+        <th style="width:5%;">MMSI</th>
+        <th style="width:7%;">SPA</th>
+        <th style="width:6%;">Grouping</th>
+        <th style="width:5%;">Org</th>
+        <th style="width:6%;">Status</th>
+        <th style="width:4%;">P/E</th>
+        <th style="width:3%;"></th>
+      </tr></thead>
+      <tbody id="l2Body"></tbody>
+    </table>
+  </div>
+  <div class="l2-footer">
+    <span class="auto-dates">L1 dates auto-update from L2 range</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="closeL2Page()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveL2()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">Add Activity</h2>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="fTitle"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Region</label><select class="form-select" id="fRegion" onchange="onRegionChange()"><option>North Sea</option><option selected>M&S</option><option>Egypt</option></select></div>
+      <div class="form-group"><label class="form-label">Area</label><select class="form-select" id="fArea" onchange="onAreaChange()"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Asset</label><select class="form-select" id="fAsset" onchange="onAssetChange()"></select></div>
+      <div class="form-group"><label class="form-label">Field</label><select class="form-select" id="fField"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Vessel</label><input class="form-input" id="fVessel"></div>
+      <div class="form-group"><label class="form-label">Vessel Contractor</label><input class="form-input" id="fContractor"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Grouping</label><select class="form-select" id="fGrouping"><option>Drilling</option><option>Well STIM/LWI</option><option>W2W</option><option selected>IRM</option><option>Construction</option><option>DSV</option><option>Survey</option><option>Platform</option><option>Logistics</option><option>Seismic Survey</option></select></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="fStatus"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="position:relative;"><label class="form-label">SPA</label><input class="form-input" id="fSPA" autocomplete="off" placeholder="Type to search..." oninput="searchSPA(this.value,'fSPAResults')"><div class="spa-results" id="fSPAResults"></div></div>
+      <div class="form-group"><label class="form-label">Organisation</label><select class="form-select" id="fOrg"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">From</label><input class="form-input" type="date" id="fFrom"></div>
+      <div class="form-group"><label class="form-label">To</label><input class="form-input" type="date" id="fTo"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Window From</label><input class="form-input" type="date" id="fWinFrom"></div>
+      <div class="form-group"><label class="form-label">Window To</label><input class="form-input" type="date" id="fWinTo"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Planned/Emergent</label><select class="form-select" id="fPE"></select></div>
+      <div class="form-group"><label class="form-label">CVR Requirement</label><select class="form-select" id="fCVR"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">MMSI</label><input class="form-input" id="fMMSI" type="number" placeholder="e.g. 258060000"></div>
+      <div class="form-group"><label class="form-label">Business Planning Element</label><input class="form-input" id="fBPE"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveModal()">Save</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var SCOPE_COLORS={'Drilling':'#c45222','Well STIM/LWI':'#1a8c68','W2W':'#2196a3','IRM':'#2d6cb4','Construction':'#7c5cbf','DSV':'#b83f6b','Survey':'#607d8b','Platform':'#7a7972','Logistics':'#b8860b','Seismic Survey':'#5c6bc0'};
+var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var SUBTYPES=['Work','Port','Transit','Contingency','Potential Window'];
+var GROUPINGS=['Drilling','Well STIM/LWI','W2W','IRM','Construction','DSV','Survey','Platform','Logistics','Seismic Survey'];
+var STATUSES=['Planned - Confirmed/Contracted','Planned - Awaiting confirmation/Contract','Ongoing','Completed','Cancelled','Deleted-input in error'];
+var PE_OPTS=['Planned - 2QPF','Planned - 4QPF','Planned - 8Q+','Emergent'];
+var ORG_CHOICES=['Subsea','Wells','Major Projects','Production','Decommissioning','3rd Party','Survey'];
+var CVR_CHOICES=['Yes','No'];
+
+// Lookup lists (in production: fetched from SharePoint)
+// Cascading hierarchy: Region -> Area -> Asset -> Field
+// Populated from SharePoint data on load
+var HIERARCHY={};
+
+function getAreas(region){return region&&HIERARCHY[region]?Object.keys(HIERARCHY[region]).sort():[];}
+function getAssets(region,area){return region&&area&&HIERARCHY[region]&&HIERARCHY[region][area]?Object.keys(HIERARCHY[region][area]).sort():[];}
+function getFields(region,area,asset){return region&&area&&asset&&HIERARCHY[region]&&HIERARCHY[region][area]&&HIERARCHY[region][area][asset]?HIERARCHY[region][area][asset].sort():[];}
+function getAllAssets(region){
+  if(!region||!HIERARCHY[region])return[];
+  var s={};
+  Object.keys(HIERARCHY[region]).forEach(function(a){Object.keys(HIERARCHY[region][a]).forEach(function(ast){s[ast]=true;});});
+  return Object.keys(s).sort();
+}
+function getAllFields(region,area){
+  if(!region||!HIERARCHY[region])return[];
+  var s={};
+  var areas=area?[area]:Object.keys(HIERARCHY[region]);
+  areas.forEach(function(a){
+    if(!HIERARCHY[region][a])return;
+    Object.keys(HIERARCHY[region][a]).forEach(function(ast){
+      (HIERARCHY[region][a][ast]||[]).forEach(function(f){s[f]=true;});
+    });
+  });
+  return Object.keys(s).sort();
+}
+
+// Lookup lists — populated from SharePoint data on load
+var SPA_LIST=[];
+var ORG_LIST=[];
+
+function fmtDate(d){if(!d||typeof d==='object')return'';var dt=new Date(d);if(isNaN(dt.getTime()))return'';return dt.getDate()+' '+MONTHS[dt.getMonth()];}
+function fmtDateFull(d){if(!d||typeof d==='object')return'';var dt=new Date(d);if(isNaN(dt.getTime()))return'';return dt.getDate()+' '+MONTHS[dt.getMonth()]+' '+dt.getFullYear();}
+function escHtml(s){if(!s)return'';if(typeof s==='object')s=s.Value||s.Title||JSON.stringify(s);return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}function daysBetween(a,b){if(!a||!b)return 0;return Math.round((new Date(b)-new Date(a))/86400000);}
+function addDays(d,n){var dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10);}
+function getStatusClass(s){if(!s||typeof s!=='string')return'';if(s.indexOf('Confirmed')>=0)return'status-confirmed';if(s.indexOf('Awaiting')>=0)return'status-awaiting';if(s.indexOf('Ongoing')>=0)return'status-ongoing';return'';}
+
+function mkOptions(list,current,placeholder){
+  var h=placeholder?'<option value="">'+escHtml(placeholder)+'</option>':'';
+  list.forEach(function(o){h+='<option value="'+escHtml(o)+'"'+(o===current?' selected':'')+'>'+escHtml(o)+'</option>';});
+  return h;
+}
+function mkShortOptions(list,current){
+  var h='';
+  list.forEach(function(o){
+    var short=o.replace('Planned - ','').replace('/Contracted','').replace('/Contract','');
+    if(short.length>12)short=short.substring(0,12);
+    h+='<option value="'+escHtml(o)+'"'+(o===current?' selected':'')+'>'+escHtml(short)+'</option>';
+  });
+  return h;
+}
+
+var currentTab='all';
+var currentL1=null;
+
+// ── API CONFIGURATION ──
+// Power Automate flow URL - set this to your flow's HTTP trigger URL
+var FLOW_URL='https://defaultea80952ea47642d4aaf45457852b0f.7e.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b2d0837cf6b240aca8d30c98c6f3cfb9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dNLiDCN2kuTJFef6d8gHbwekqem6vWLAZ0Q3Q-gFQo8';
+
+var activities=[];
+var isLoading=false;
+
+// ── API CALLS ──
+function apiCall(payload){
+  return fetch(FLOW_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(function(r){
+    if(!r.ok)throw new Error('Flow returned '+r.status);
+    return r.json();
+  });
+}
+
+function fmtSPDate(d){
+  // Convert YYYY-MM-DD to SharePoint date format
+  if(!d)return null;
+  return d+'T00:00:00Z';
+}
+
+function parseSPDate(d){
+  // Convert SharePoint date to YYYY-MM-DD
+  if(!d)return'';
+  return d.substring(0,10);
+}
+
+function toStr(v){
+  if(!v&&v!==0)return'';
+  if(typeof v==='object')return v.Value||v.Title||v.Label||v.DisplayName||v.EMail||'';
+  return String(v);
+}
+
+function getLookupVal(v){
+  if(!v)return'';
+  if(typeof v==='object')return v.Value||v.Title||v.value||v.title||'';
+  return String(v);
+}
+
+function getLookupId(v){
+  if(!v)return null;
+  if(typeof v==='object')return v.Id||v.id||null;
+  return null;
+}
+
+function getPersonVal(v){
+  if(!v)return'';
+  if(Array.isArray(v))return v.map(function(p){return p.Title||p.DisplayName||p.EMail||'';}).join(', ');
+  if(typeof v==='object')return v.Title||v.DisplayName||v.EMail||'';
+  return String(v);
+}
+
+function getPersonEmail(v){
+  if(!v)return'';
+  if(Array.isArray(v))return v.length>0?(v[0].EMail||v[0].Email||v[0].email||''):'';
+  if(typeof v==='object')return v.EMail||v.Email||v.email||'';
+  return'';
+}
+
+function getPersonId(v){
+  if(!v)return null;
+  if(Array.isArray(v))return v.length>0?(v[0].Id||v[0].id||null):null;
+  if(typeof v==='object')return v.Id||v.id||null;
+  return null;
+}
+
+function mapSPItem(sp){
+  // Debug: log first item to see actual field names
+  if(!window._spLogged){window._spLogged=true;console.log('SP item fields:',Object.keys(sp));console.log('SP item sample:',JSON.stringify(sp).substring(0,500));}
+  return {
+    id:sp.ID||sp.Id||0,
+    level:toStr(sp.Level)||'Standalone',
+    title:toStr(sp.Title),
+    grouping:toStr(sp.Grouping_x002f_Natureofscope||sp.Grouping_x002f_Nature_x0020_of_x||sp['Grouping/Nature of scope']),
+    region:getLookupVal(sp.Region),
+    regionId:getLookupId(sp.Region),
+    area:getLookupVal(sp.Area),
+    areaId:getLookupId(sp.Area),
+    asset:getLookupVal(sp.Asset),
+    assetId:getLookupId(sp.Asset),
+    field:getLookupVal(sp.Field),
+    fieldId:getLookupId(sp.Field),
+    vessel:toStr(sp.Vessel),
+    contractor:toStr(sp.VesselContractor||sp.Vessel_x0020_Contractor),
+    mmsi:toStr(sp.MMSI),
+    spa:getPersonVal(sp.SPA),
+    spaId:getPersonId(sp.SPA),
+    spaEmail:getPersonEmail(sp.SPA),
+    org:toStr(sp.Organisation),
+    status:toStr(sp.Status),
+    from:parseSPDate(sp.From)||'',
+    to:parseSPDate(sp.To)||'',
+    winFrom:parseSPDate(sp.WindowFrom||sp.Window_x0020_From)||'',
+    winTo:parseSPDate(sp.WindowTo||sp.Window_x0020_To)||'',
+    pe:toStr(sp.Planned_x002f_Emergent),
+    cvr:sp.CVRRequirement?'Yes':'No',
+    bpe:toStr(sp.BusinessPlanningElement),
+    subType:toStr(sp.SubType),
+    parentCampaign:toStr(sp.ParentCampaign||sp.Parent_x0020_Campaign),
+    lat:sp.Lat||null,
+    lng:sp.Long||null,
+    l2:[]
+  };
+}
+
+function loadActivities(region){
+  isLoading=true;
+  showToast('Loading '+region+' activities...');
+  document.getElementById('mainBody').innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--text-tri);">Loading...</td></tr>';
+
+  apiCall({action:'load',region:region}).then(function(data){
+    var allItems=(Array.isArray(data)?data:data.value||[]).map(mapSPItem);
+
+    // Build SPA and Org lists from loaded data (accumulate across loads)
+    var spaSet={},orgSet={},spaIdMap={},spaEmailMap={};
+    // Keep existing SPAs from previous loads
+    SPA_LIST.forEach(function(s){spaSet[s]=true;});
+    if(window._spaIdMap){Object.keys(window._spaIdMap).forEach(function(k){spaIdMap[k]=window._spaIdMap[k];});}
+    if(window._spaEmailMap){Object.keys(window._spaEmailMap).forEach(function(k){spaEmailMap[k]=window._spaEmailMap[k];});}
+    
+    allItems.forEach(function(item){
+      if(item.spa)spaSet[item.spa]=true;
+      if(item.org)orgSet[item.org]=true;
+      if(item.spa&&item.spaId)spaIdMap[item.spa]=item.spaId;
+      if(item.spa&&item.spaEmail)spaEmailMap[item.spa]=item.spaEmail;
+    });
+    SPA_LIST=Object.keys(spaSet).sort();
+    ORG_LIST=Object.keys(orgSet).sort();
+    window._spaIdMap=spaIdMap;
+    window._spaEmailMap=spaEmailMap;
+
+    // Separate L1/Standalone from L2
+    var l1Map={};
+    activities=[];
+
+    allItems.forEach(function(item){
+      if(item.level==='L2'){
+        // Will attach to parent later
+      }else{
+        activities.push(item);
+        if(item.level==='L1')l1Map[item.title]=item;
+      }
+    });
+
+    // Attach L2s to their parent L1
+    allItems.forEach(function(item){
+      if(item.level==='L2'&&item.parentCampaign&&l1Map[item.parentCampaign]){
+        var dur=daysBetween(item.from,item.to)+1;
+        l1Map[item.parentCampaign].l2.push({
+          id:item.id,title:item.title,subType:item.subType||'Work',
+          area:item.area,asset:item.asset,field:item.field,
+          vessel:item.vessel,mmsi:item.mmsi||'',duration:dur>0?dur:1,
+          from:item.from,to:item.to,
+          spa:item.spa,org:item.org,grouping:item.grouping,
+          status:item.status,pe:item.pe,
+          parentCampaign:item.parentCampaign,level:'L2'
+        });
+      }
+    });
+
+    // Sort L2s by date
+    activities.forEach(function(a){
+      if(a.l2)a.l2.sort(function(x,y){return(x.from||'').localeCompare(y.from||'');});
+    });
+
+    isLoading=false;
+    populateFilterDropdowns();
+    render();
+    showToast(activities.length+' activities loaded');
+  }).catch(function(err){
+    isLoading=false;
+    console.error('Load error:',err);
+    showToast('Error loading: '+err.message);
+    // Fall back to empty
+    activities=[];
+    render();
+  });
+}
+
+// Multi-select filter state
+var mfState={mfArea:[],mfAsset:[],mfGrouping:[],mfSPA:[],mfStatus:[],mfOrg:[]};
+var mfFieldMap={mfArea:'area',mfAsset:'asset',mfGrouping:'grouping',mfSPA:'spa',mfStatus:'status',mfOrg:'org'};
+
+// Sort state
+var sortField='from';
+var sortDir='asc';
+
+function toggleMF(id){
+  // Close others
+  document.querySelectorAll('.mf-drop.open').forEach(function(el){if(el.parentElement.id!==id)el.classList.remove('open');});
+  document.getElementById(id).querySelector('.mf-drop').classList.toggle('open');
+}
+
+function buildMFDropdown(id,values){
+  var drop=document.getElementById(id).querySelector('.mf-drop');
+  var selected=mfState[id]||[];
+  drop.innerHTML=values.map(function(v){
+    var checked=selected.indexOf(v)>=0;
+    return '<label class="mf-opt'+(checked?' checked':'')+'"><input type="checkbox" '+(checked?'checked':'')+' onchange="onMFChange(\''+id+'\',\''+escHtml(v)+'\',this.checked)"> '+escHtml(v)+'</label>';
+  }).join('');
+}
+
+function onMFChange(id,value,checked){
+  if(checked){
+    if(mfState[id].indexOf(value)<0)mfState[id].push(value);
+  }else{
+    mfState[id]=mfState[id].filter(function(v){return v!==value;});
+  }
+  updateMFBtn(id);
+  render();
+}
+
+function updateMFBtn(id){
+  var btn=document.getElementById(id).querySelector('.mf-btn');
+  var cnt=document.getElementById(id).querySelector('.mf-count');
+  var n=mfState[id].length;
+  if(n>0){btn.classList.add('active');cnt.textContent=n;cnt.classList.add('show');}
+  else{btn.classList.remove('active');cnt.classList.remove('show');}
+}
+
+function populateFilterDropdowns(){
+  var sets={mfArea:{},mfAsset:{},mfGrouping:{},mfSPA:{},mfStatus:{},mfOrg:{}};
+  activities.forEach(function(a){
+    if(a.area)sets.mfArea[a.area]=true;
+    if(a.asset)sets.mfAsset[a.asset]=true;
+    if(a.grouping)sets.mfGrouping[a.grouping]=true;
+    if(a.spa)sets.mfSPA[a.spa]=true;
+    if(a.status)sets.mfStatus[a.status]=true;
+    if(a.org)sets.mfOrg[a.org]=true;
+  });
+  Object.keys(sets).forEach(function(id){buildMFDropdown(id,Object.keys(sets[id]).sort());});
+  // Modal dropdowns - use fixed SharePoint choice lists
+  document.getElementById('fOrg').innerHTML=mkOptions(ORG_CHOICES,'','Select org...');
+  document.getElementById('fStatus').innerHTML=mkOptions(STATUSES,'','Select status...');
+  document.getElementById('fPE').innerHTML=mkOptions(PE_OPTS,'','Select...');
+  document.getElementById('fCVR').innerHTML=mkOptions(CVR_CHOICES,'','Select...');
+}
+
+function clearFilters(){
+  document.getElementById('filterSearch').value='';
+  Object.keys(mfState).forEach(function(id){mfState[id]=[];updateMFBtn(id);});
+  populateFilterDropdowns();
+  render();
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.multi-filter')){
+    document.querySelectorAll('.mf-drop.open').forEach(function(el){el.classList.remove('open');});
+  }
+});
+
+function sortBy(field){
+  if(sortField===field){sortDir=sortDir==='asc'?'desc':'asc';}
+  else{sortField=field;sortDir='asc';}
+  // Update header classes
+  document.querySelectorAll('.tbl th.sortable').forEach(function(th){th.classList.remove('sort-asc','sort-desc');});
+  var ths=document.querySelectorAll('.tbl th.sortable');
+  ths.forEach(function(th){
+    if(th.getAttribute('onclick').indexOf("'"+field+"'")>=0){
+      th.classList.add(sortDir==='asc'?'sort-asc':'sort-desc');
+    }
+  });
+  render();
+}
+
+function getFiltered(){
+  var items=activities.filter(function(a){return a.level!=='L2';});
+  if(currentTab==='campaigns')items=items.filter(function(a){return a.level==='L1';});
+  if(currentTab==='standalone')items=items.filter(function(a){return a.level==='Standalone';});
+  var search=(document.getElementById('filterSearch').value||'').toLowerCase();
+  if(search)items=items.filter(function(a){return(a.title||'').toLowerCase().indexOf(search)>=0||(a.vessel||'').toLowerCase().indexOf(search)>=0;});
+  // Multi-select filters
+  Object.keys(mfState).forEach(function(id){
+    var sel=mfState[id];
+    if(sel.length>0){
+      var field=mfFieldMap[id];
+      items=items.filter(function(a){return sel.indexOf(a[field])>=0;});
+    }
+  });
+  // Sort
+  items.sort(function(a,b){
+    var va=a[sortField]||'',vb=b[sortField]||'';
+    if(typeof va==='string')va=va.toLowerCase();
+    if(typeof vb==='string')vb=vb.toLowerCase();
+    var cmp=va<vb?-1:va>vb?1:0;
+    return sortDir==='desc'?-cmp:cmp;
+  });
+  return items;
+}
+
+function render(){
+  var items=getFiltered();
+  var body=document.getElementById('mainBody');
+  body.innerHTML='';
+  items.forEach(function(a){
+    var col=SCOPE_COLORS[a.grouping]||'#888';
+    var sc=getStatusClass(a.status);
+    var levelCls=a.level==='L1'?'level-l1':'level-standalone';
+    var l2Count=a.l2?a.l2.length:0;
+    var tr=document.createElement('tr');
+    tr.className=a.level==='L1'?'l1-row':'';
+    tr.innerHTML='<td><span class="level-badge '+levelCls+'">'+a.level+'</span></td>'+
+      '<td style="font-weight:500;">'+escHtml(a.title)+'</td>'+
+      '<td>'+escHtml(a.area)+'</td><td>'+escHtml(a.asset)+'</td>'+
+      '<td>'+escHtml(a.vessel)+'</td>'+
+      '<td><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(a.grouping)+'</td>'+
+      '<td>'+escHtml(a.spa)+'</td><td>'+escHtml(a.org)+'</td>'+
+      '<td><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
+      '<td class="date-cell">'+fmtDate(a.from)+'</td><td class="date-cell">'+fmtDate(a.to)+'</td>'+
+      '<td class="date-cell">'+fmtDate(a.winFrom)+'</td><td class="date-cell">'+fmtDate(a.winTo)+'</td>'+
+      '<td>'+(l2Count>0?'<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>':'')+'</td>'+
+      '<td><div style="display:flex;gap:3px;"><button class="btn btn-sm btn-icon" onclick="openEditModal('+a.id+')" title="Edit">&#9998;</button>'+(a.level==='Standalone'?'<button class="btn btn-sm" onclick="convertToCampaign('+a.id+')" title="Convert to campaign" style="font-size:8px;">&#8594; L1</button>':'')+'</div></td>';
+    body.appendChild(tr);
+  });
+  var all=activities.filter(function(a){return a.level!=='L2';}).length;
+  document.getElementById('countAll').textContent=all;
+  document.getElementById('countCampaigns').textContent=activities.filter(function(a){return a.level==='L1';}).length;
+  document.getElementById('countStandalone').textContent=activities.filter(function(a){return a.level==='Standalone';}).length;
+}
+
+function setTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(el){el.classList.remove('active');});
+  if(t==='all')document.getElementById('tabAll').classList.add('active');
+  if(t==='campaigns')document.getElementById('tabCampaigns').classList.add('active');
+  if(t==='standalone')document.getElementById('tabStandalone').classList.add('active');
+  render();
+}
+
+// L2 Page
+function openL2Page(id){
+  currentL1=activities.find(function(a){return a.id===id;});
+  if(!currentL1)return;
+  document.getElementById('l2Title').textContent=currentL1.title;
+  document.getElementById('l2Sub').textContent=(currentL1.vessel||'No vessel')+' \u2014 '+currentL1.grouping;
+  document.getElementById('l2Meta').innerHTML='<span>'+escHtml(currentL1.spa)+'</span><span>'+escHtml(currentL1.org)+'</span><span>'+fmtDateFull(currentL1.from)+' \u2192 '+fmtDateFull(currentL1.to)+'</span>';
+  renderL2();
+  document.getElementById('l2Page').classList.add('open');
+}
+
+function closeL2Page(){
+  document.getElementById('l2Page').classList.remove('open');
+  document.getElementById('pasteArea').classList.remove('show');
+  currentL1=null;
+  render();
+}
+
+function renderL2(){
+  if(!currentL1)return;
+  var body=document.getElementById('l2Body');
+  body.innerHTML='';
+  var items=currentL1.l2||[];
+  document.getElementById('l2Count').textContent=items.length+' activities';
+
+  items.forEach(function(l,i){
+    var vesselDiff=l.vessel&&l.vessel!==currentL1.vessel;
+    var spaDiff=l.spa&&l.spa!==currentL1.spa;
+    var orgDiff=l.org&&l.org!==currentL1.org;
+    var grpDiff=l.grouping&&l.grouping!==currentL1.grouping;
+
+    var rgn=currentL1.region;
+    // Try case-insensitive region match
+    if(!HIERARCHY[rgn]){
+      var rgnKeys=Object.keys(HIERARCHY);
+      for(var ri=0;ri<rgnKeys.length;ri++){
+        if(rgnKeys[ri].toLowerCase().trim()===rgn.toLowerCase().trim()){rgn=rgnKeys[ri];break;}
+      }
+    }
+    var rowArea=l.area||'';
+    var rowAsset=l.asset||'';
+    var rowField=l.field||'';
+    // If no area/asset set, default from L1 but allow blank
+    if(!l.area&&!l.asset&&currentL1.area)rowArea=currentL1.area;
+    if(!l.asset&&currentL1.asset)rowAsset=currentL1.asset;
+    var areaOpts=getAreas(rgn);
+    var assetOpts=rowArea?getAssets(rgn,rowArea):getAllAssets(rgn);
+    var fieldOpts=(rowArea&&rowAsset)?getFields(rgn,rowArea,rowAsset):getAllFields(rgn,rowArea);
+    if(i===0)console.log('L2 cascade debug:', {rgn:rgn, hierarchyKeys:Object.keys(HIERARCHY), match:!!HIERARCHY[rgn], rowArea:rowArea, areaOpts:areaOpts, assetOpts:assetOpts});
+
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><span class="seq-num">'+(i+1)+'</span></td>'+
+      '<td><input class="l2-input" value="'+escHtml(l.title)+'" onchange="updateL2('+i+',\'title\',this.value)"></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'subType\',this.value)">'+mkShortOptions(SUBTYPES,l.subType||'Work')+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'area\',this.value);renderL2()"><option value="">—</option>'+mkOptions(areaOpts,rowArea,'')+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'asset\',this.value);renderL2()"><option value="">—</option>'+mkOptions(assetOpts,rowAsset,'')+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'field\',this.value)"><option value="">—</option>'+mkOptions(fieldOpts,rowField,'')+'</select></td>'+
+      '<td><input class="duration-input" type="number" min="1" value="'+l.duration+'" onchange="updateL2Duration('+i+',this.value)"></td>'+
+      '<td class="date-cell">'+fmtDate(l.from)+'</td>'+
+      '<td class="chain-arrow">\u2192</td>'+
+      '<td class="date-cell">'+fmtDate(l.to)+'</td>'+
+      '<td><input class="l2-input'+(vesselDiff?' diff':'')+'" value="'+escHtml(l.vessel||'')+'" placeholder="'+escHtml(currentL1.vessel)+'" onchange="updateL2('+i+',\'vessel\',this.value)"></td>'+
+      '<td><input class="l2-input" value="'+escHtml(l.mmsi||'')+'" placeholder="'+escHtml(currentL1.mmsi||'')+'" onchange="updateL2('+i+',\'mmsi\',this.value)" style="font-family:var(--mono);font-size:8px;"></td>'+
+      '<td><div class="l2-spa-wrap"><input class="l2-input'+(spaDiff?' diff':'')+'" value="'+escHtml(l.spa||currentL1.spa)+'" placeholder="Search..." oninput="searchSPA(this.value,\'l2spa'+i+'\','+i+')" id="l2spaInput'+i+'"><div class="l2-spa-results" id="l2spa'+i+'"></div></div></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'grouping\',this.value)" style="'+(grpDiff?'color:var(--accent);font-weight:600;':'')+'">'+mkShortOptions(GROUPINGS,l.grouping||currentL1.grouping)+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'org\',this.value)" style="'+(orgDiff?'color:var(--accent);font-weight:600;':'')+'">'+mkOptions(ORG_LIST,l.org||currentL1.org,'')+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'status\',this.value)">'+mkShortOptions(STATUSES,l.status||currentL1.status)+'</select></td>'+
+      '<td><select class="l2-select" onchange="updateL2('+i+',\'pe\',this.value)">'+mkShortOptions(PE_OPTS,l.pe||currentL1.pe)+'</select></td>'+
+      '<td><button class="btn btn-sm btn-icon btn-danger" onclick="deleteL2('+i+')">\u00D7</button></td>';
+    body.appendChild(tr);
+  });
+}
+
+function updateL2(idx,field,value){if(currentL1&&currentL1.l2[idx])currentL1.l2[idx][field]=value;}
+
+function updateL2Duration(idx,value){
+  if(!currentL1||!currentL1.l2[idx])return;
+  currentL1.l2[idx].duration=parseInt(value)||1;
+  recalcL2Dates(idx);
+  renderL2();
+}
+
+function recalcL2Dates(fromIdx){
+  if(!currentL1)return;
+  var items=currentL1.l2;
+  for(var i=fromIdx;i<items.length;i++){
+    if(i>0)items[i].from=addDays(items[i-1].to,1);
+    if(items[i].from&&items[i].duration)items[i].to=addDays(items[i].from,items[i].duration-1);
+  }
+  if(items.length>0){
+    currentL1.from=items[0].from;
+    currentL1.to=items[items.length-1].to;
+    document.getElementById('l2Meta').innerHTML='<span>'+escHtml(currentL1.spa)+'</span><span>'+escHtml(currentL1.org)+'</span><span>'+fmtDateFull(currentL1.from)+' \u2192 '+fmtDateFull(currentL1.to)+'</span>';
+  }
+}
+
+function addL2Row(){
+  if(!currentL1)return;
+  if(!currentL1.l2)currentL1.l2=[];
+  var lastTo=currentL1.l2.length>0?currentL1.l2[currentL1.l2.length-1].to:null;
+  var newFrom=lastTo?addDays(lastTo,1):(currentL1.from||'');
+  var newTo=newFrom?addDays(newFrom,0):'';
+  currentL1.l2.push({id:0,title:'',subType:'Work',area:currentL1.area,asset:currentL1.asset,field:'',vessel:currentL1.vessel,mmsi:currentL1.mmsi||'',duration:1,from:newFrom,to:newTo,spa:currentL1.spa,org:currentL1.org,grouping:currentL1.grouping,status:currentL1.status,pe:currentL1.pe,parentCampaign:currentL1.title,level:'L2'});
+  renderL2();
+}
+
+function deleteL2(idx){
+  if(!currentL1)return;
+  currentL1.l2.splice(idx,1);
+  if(currentL1.l2.length>0)recalcL2Dates(0);
+  renderL2();
+}
+
+function togglePaste(){document.getElementById('pasteArea').classList.toggle('show');}
+
+function copyPasteExample(){
+  var header='Title\tSubType\tArea\tAsset\tField\tDuration\tVessel\tMMSI\tSPA\tGrouping\tOrg\tStatus\tP/E';
+  var row1='Mob from Port\tTransit\tGTA\tGTA\tNouakchott\t2\t\t\t\t\t\t\t';
+  var row2='Hub Inspection\tWork\tGTA\tGTA\tGTA Hub\t5\t\t\t\t\t\t\t';
+  var row3='Subsea Repairs\tWork\tGTA\tGTA\tGTA1a-Subsea\t10\t\t\t\t\t\t\t';
+  var row4='Demob to Port\tTransit\tGTA\tGTA\tNouakchott\t2\t\t\t\t\t\t\t';
+  var text=header+'\n'+row1+'\n'+row2+'\n'+row3+'\n'+row4;
+  navigator.clipboard.writeText(text).then(function(){showToast('Example copied - paste into Excel, fill in, then paste back here');});
+}
+
+function processPaste(){
+  var text=document.getElementById('pasteInput').value.trim();
+  if(!text)return;
+  var lines=text.split('\n');
+  var lastTo=currentL1.l2.length>0?currentL1.l2[currentL1.l2.length-1].to:null;
+  var count=0;
+  lines.forEach(function(line){
+    var c=line.split('\t');
+    if(!c[0]||!c[0].trim())return;
+    // Title|SubType|Area|Asset|Field|Duration|Vessel|MMSI|SPA|Grouping|Org|Status|P/E
+    var dur=parseInt(c[5])||1;
+    var from=lastTo?addDays(lastTo,1):(currentL1.from||'');
+    var to=from?addDays(from,dur-1):'';
+    lastTo=to;
+    currentL1.l2.push({
+      id:0,
+      title:(c[0]||'').trim(),
+      subType:(c[1]||'Work').trim(),
+      area:(c[2]||currentL1.area||'').trim(),
+      asset:(c[3]||currentL1.asset||'').trim(),
+      field:(c[4]||'').trim(),
+      duration:dur,from:from,to:to,
+      vessel:(c[6]||currentL1.vessel||'').trim(),
+      mmsi:(c[7]||currentL1.mmsi||'').trim(),
+      spa:(c[8]||currentL1.spa||'').trim(),
+      grouping:(c[9]||currentL1.grouping||'').trim(),
+      org:(c[10]||currentL1.org||'').trim(),
+      status:(c[11]||currentL1.status||'').trim(),
+      pe:(c[12]||currentL1.pe||'').trim(),
+      parentCampaign:currentL1.title,
+      level:'L2'
+    });
+    count++;
+  });
+  document.getElementById('pasteInput').value='';
+  document.getElementById('pasteArea').classList.remove('show');
+  recalcL2Dates(0);
+  renderL2();
+  showToast(count+' rows imported');
+}
+
+function saveL2(){
+  recalcL2Dates(0);
+  if(!currentL1)return;
+  // Resolve lookup IDs for each L2 row
+  var ids=window._lookupIds||{region:{},area:{},asset:{},field:{}};
+  var spaMap=window._spaIdMap||{};
+  currentL1.l2.forEach(function(l){
+    l.parentCampaign=currentL1.title;
+    l.level='L2';
+    l.regionId=ids.region[l.region||currentL1.region]||currentL1.regionId||null;
+    l.areaId=l.area?ids.area[l.area]||(l.area===currentL1.area?currentL1.areaId:null)||null:null;
+    l.assetId=l.asset?ids.asset[l.asset]||(l.asset===currentL1.asset?currentL1.assetId:null)||null:null;
+    l.fieldId=l.field?ids.field[l.field]||null:null;
+    l.spaId=spaMap[l.spa||currentL1.spa]||currentL1.spaId||null;
+    var spaEmail=(window._spaEmailMap||{})[l.spa||currentL1.spa]||'';
+    l.spaClaims=spaEmail?'i:0#.f|membership|'+spaEmail:'';
+  });
+
+  showToast('Saving campaign...');
+  apiCall({
+    action:'saveL2Batch',
+    parentCampaign:currentL1.title,
+    l1Id:currentL1.id,
+    l1From:currentL1.from,
+    l1To:currentL1.to,
+    l1Title:currentL1.title,
+    l1Vessel:currentL1.vessel,
+    l1Mmsi:currentL1.mmsi,
+    items:currentL1.l2
+  }).then(function(result){
+    closeL2Page();
+    loadActivities(document.getElementById('regionSelect').value);
+    showToast('Campaign saved');
+  }).catch(function(err){
+    console.error('Save L2 error:',err);
+    showToast('Error saving: '+err.message);
+  });
+}
+
+function convertToCampaign(id){
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  if(!confirm('Convert "'+a.title+'" to a campaign? This will change it to L1 and open the L2 editor.'))return;
+
+  showToast('Converting...');
+  apiCall({action:'convertToL1',item:{id:a.id}}).then(function(){
+    a.level='L1';
+    a.l2=[{
+      id:0,title:a.title,subType:'Work',area:a.area,asset:a.asset,field:a.field,
+      vessel:a.vessel,duration:daysBetween(a.from,a.to)+1||1,from:a.from,to:a.to,
+      spa:a.spa,org:a.org,grouping:a.grouping,status:a.status,pe:a.pe,
+      parentCampaign:a.title,level:'L2'
+    }];
+    render();
+    openL2Page(id);
+    showToast('Converted - add L2 activities and save');
+  }).catch(function(err){
+    console.error('Convert error:',err);
+    showToast('Error: '+err.message);
+  });
+}
+
+// Modal
+var editingId=null,addingLevel='Standalone';
+
+function openAddModal(level){
+  editingId=null;addingLevel=level;
+  document.getElementById('modalTitle').textContent='Add '+(level==='L1'?'Campaign':'Standalone Activity');
+  ['fTitle','fVessel','fContractor','fFrom','fTo','fWinFrom','fWinTo','fMMSI','fBPE'].forEach(function(id){document.getElementById(id).value='';});
+  var rgn=document.getElementById('regionSelect').value;
+  setModalCascade(rgn,'','','');
+  document.getElementById('fSPA').value='';
+  document.getElementById('fOrg').value='';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function openEditModal(id){
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  editingId=id;addingLevel=a.level;
+  document.getElementById('modalTitle').textContent='Edit: '+a.title;
+  document.getElementById('fTitle').value=a.title;
+  setModalCascade(a.region,a.area,a.asset,a.field);
+  document.getElementById('fVessel').value=a.vessel;
+  document.getElementById('fContractor').value=a.contractor||'';
+  document.getElementById('fGrouping').value=a.grouping;
+  document.getElementById('fStatus').value=a.status;
+  document.getElementById('fSPA').value=a.spa;
+  document.getElementById('fOrg').value=a.org;
+  document.getElementById('fFrom').value=a.from;
+  document.getElementById('fTo').value=a.to;
+  document.getElementById('fWinFrom').value=a.winFrom||'';
+  document.getElementById('fWinTo').value=a.winTo||'';
+  document.getElementById('fPE').value=a.pe;
+  document.getElementById('fCVR').value=a.cvr;
+  document.getElementById('fMMSI').value=a.mmsi||'';
+  document.getElementById('fBPE').value=a.bpe||'';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
+
+function saveModal(){
+  var data={title:document.getElementById('fTitle').value,region:document.getElementById('fRegion').value,area:document.getElementById('fArea').value,asset:document.getElementById('fAsset').value,field:document.getElementById('fField').value,vessel:document.getElementById('fVessel').value,contractor:document.getElementById('fContractor').value,grouping:document.getElementById('fGrouping').value,status:document.getElementById('fStatus').value,spa:document.getElementById('fSPA').value,org:document.getElementById('fOrg').value,from:document.getElementById('fFrom').value,to:document.getElementById('fTo').value,winFrom:document.getElementById('fWinFrom').value,winTo:document.getElementById('fWinTo').value,pe:document.getElementById('fPE').value,cvr:document.getElementById('fCVR').value,mmsi:document.getElementById('fMMSI').value,bpe:document.getElementById('fBPE').value};
+
+  // Resolve lookup IDs for SharePoint
+  var ids=window._lookupIds||{region:{},area:{},asset:{},field:{}};
+  data.regionId=ids.region[data.region]||null;
+  data.areaId=ids.area[data.area]||null;
+  data.assetId=ids.asset[data.asset]||null;
+  data.fieldId=ids.field[data.field]||null;
+  // Resolve SPA - person column needs claims format
+  var spaEmail=(window._spaEmailMap||{})[data.spa]||'';
+  data.spaId=(window._spaIdMap||{})[data.spa]||null;
+  data.spaClaims=spaEmail?'i:0#.f|membership|'+spaEmail:'';
+
+  if(editingId){
+    data.id=editingId;
+  }
+  data.level=addingLevel;
+
+  showToast('Saving...');
+  apiCall({action:'saveItem',item:data}).then(function(result){
+    closeModal();
+    loadActivities(document.getElementById('regionSelect').value);
+    showToast(editingId?'Activity updated':'Activity created');
+  }).catch(function(err){
+    console.error('Save error:',err);
+    showToast('Error saving: '+err.message);
+  });
+}
+
+function changeRegion(region){
+  document.getElementById('fRegion').value=region;
+  loadActivities(region);
+}
+
+function onRegionChange(){
+  var r=document.getElementById('fRegion').value;
+  var areas=getAreas(r);
+  document.getElementById('fArea').innerHTML='<option value="">Select area...</option>'+areas.map(function(a){return'<option>'+escHtml(a)+'</option>';}).join('');
+  document.getElementById('fAsset').innerHTML='<option value="">Select asset...</option>';
+  document.getElementById('fField').innerHTML='<option value="">Select field...</option>';
+}
+function onAreaChange(){
+  var r=document.getElementById('fRegion').value;
+  var a=document.getElementById('fArea').value;
+  var assets=getAssets(r,a);
+  document.getElementById('fAsset').innerHTML='<option value="">Select asset...</option>'+assets.map(function(x){return'<option>'+escHtml(x)+'</option>';}).join('');
+  document.getElementById('fField').innerHTML='<option value="">Select field...</option>';
+}
+function onAssetChange(){
+  var r=document.getElementById('fRegion').value;
+  var a=document.getElementById('fArea').value;
+  var ast=document.getElementById('fAsset').value;
+  var fields=getFields(r,a,ast);
+  document.getElementById('fField').innerHTML='<option value="">Select field...</option>'+fields.map(function(f){return'<option>'+escHtml(f)+'</option>';}).join('');
+}
+
+function setModalCascade(region,area,asset,field){
+  document.getElementById('fRegion').value=region||'';
+  var areas=getAreas(region);
+  document.getElementById('fArea').innerHTML='<option value="">Select area...</option>'+areas.map(function(a){return'<option'+(a===area?' selected':'')+'>'+escHtml(a)+'</option>';}).join('');
+  var assets=getAssets(region,area);
+  document.getElementById('fAsset').innerHTML='<option value="">Select asset...</option>'+assets.map(function(x){return'<option'+(x===asset?' selected':'')+'>'+escHtml(x)+'</option>';}).join('');
+  var fields=getFields(region,area,asset);
+  document.getElementById('fField').innerHTML='<option value="">Select field...</option>'+fields.map(function(f){return'<option'+(f===field?' selected':'')+'>'+escHtml(f)+'</option>';}).join('');
+}
+
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2000);}
+
+// SPA search-as-you-type
+var _spaSearchTimer=null;
+var _spaSearchCache={};
+
+function searchSPA(query,resultsId,l2Idx){
+  var resultsEl=document.getElementById(resultsId);
+  if(!resultsEl)return;
+  if(query.length<3){resultsEl.classList.remove('open');return;}
+
+  // Check cache first
+  var cacheKey=query.toLowerCase();
+  if(_spaSearchCache[cacheKey]){
+    renderSPAResults(_spaSearchCache[cacheKey],resultsId,l2Idx);
+    return;
+  }
+
+  // Debounce
+  clearTimeout(_spaSearchTimer);
+  resultsEl.innerHTML='<div class="spa-searching">Searching...</div>';
+  resultsEl.classList.add('open');
+
+  _spaSearchTimer=setTimeout(function(){
+    apiCall({action:'loadSPAs',search:query}).then(function(data){
+      console.log('SPA search raw response:', JSON.stringify(data).substring(0,500));
+      var users=Array.isArray(data)?data:data.value||data.body&&data.body.value||[];
+      if(!Array.isArray(users))users=[];
+      _spaSearchCache[cacheKey]=users;
+      renderSPAResults(users,resultsId,l2Idx);
+    }).catch(function(err){
+      resultsEl.innerHTML='<div class="spa-searching">Search failed</div>';
+      console.error('SPA search error:',err);
+    });
+  },400);
+}
+
+function renderSPAResults(users,resultsId,l2Idx){
+  var resultsEl=document.getElementById(resultsId);
+  if(!users||users.length===0){
+    resultsEl.innerHTML='<div class="spa-searching">No results</div>';
+    resultsEl.classList.add('open');
+    return;
+  }
+  var html='';
+  users.forEach(function(u,i){
+    var name=u.DisplayName||u.displayName||'';
+    var email=u.Mail||u.mail||u.UserPrincipalName||u.userPrincipalName||'';
+    var dept=u.Department||u.department||'';
+    var title=u.JobTitle||u.jobTitle||'';
+    // Format name as "Surname, Firstname" if it's "Firstname Surname"
+    var parts=name.split(' ');
+    var displayName=name;
+    if(parts.length>=2&&name.indexOf(',')<0){
+      displayName=parts[parts.length-1]+', '+parts.slice(0,-1).join(' ');
+    }
+    html+='<div class="spa-result" onclick="selectSPA(\''+escHtml(displayName).replace(/'/g,"\\'")+'\',\''+escHtml(email).replace(/'/g,"\\'")+'\',\''+resultsId+'\','+((l2Idx!==undefined)?l2Idx:'null')+')">';
+    html+='<div class="spa-name">'+escHtml(displayName)+'</div>';
+    html+='<div class="spa-email">'+escHtml(email)+'</div>';
+    if(dept||title)html+='<div class="spa-dept">'+escHtml([title,dept].filter(Boolean).join(' - '))+'</div>';
+    html+='</div>';
+  });
+  resultsEl.innerHTML=html;
+  resultsEl.classList.add('open');
+}
+
+function selectSPA(name,email,resultsId,l2Idx){
+  var resultsEl=document.getElementById(resultsId);
+  resultsEl.classList.remove('open');
+
+  // Store in maps
+  if(name&&email){
+    window._spaEmailMap=window._spaEmailMap||{};
+    window._spaEmailMap[name]=email;
+    window._spaIdMap=window._spaIdMap||{};
+    // Add to SPA_LIST if not already there
+    if(SPA_LIST.indexOf(name)<0)SPA_LIST.push(name);
+  }
+
+  if(l2Idx!==null&&l2Idx!==undefined&&currentL1&&currentL1.l2[l2Idx]){
+    // L2 row SPA
+    currentL1.l2[l2Idx].spa=name;
+    currentL1.l2[l2Idx].spaEmail=email;
+    currentL1.l2[l2Idx].spaClaims=email?'i:0#.f|membership|'+email:'';
+    renderL2();
+  }else{
+    // Modal SPA
+    document.getElementById('fSPA').value=name;
+  }
+}
+
+// Close SPA results when clicking outside
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.form-group')&&!e.target.closest('.l2-spa-wrap')){
+    document.querySelectorAll('.spa-results.open,.l2-spa-results.open').forEach(function(el){el.classList.remove('open');});
+  }
+});
+
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeL2Page();closeModal();}});
+
+populateFilterDropdowns();
+// Load lookups first, then activities
+loadLookups(function(){
+  loadActivities(document.getElementById('regionSelect').value);
+});
+
+function loadLookups(callback){
+  apiCall({action:'loadLookups'}).then(function(data){
+    var items=Array.isArray(data)?data:data.value||[];
+    // Build hierarchy from RBP-Fields
+    HIERARCHY={};
+    items.forEach(function(f){
+      var r=getLookupVal(f.Region);
+      var a=getLookupVal(f.Area);
+      var ast=getLookupVal(f.Asset);
+      var field=toStr(f.Title);
+      if(r){
+        if(!HIERARCHY[r])HIERARCHY[r]={};
+        if(a){
+          if(!HIERARCHY[r][a])HIERARCHY[r][a]={};
+          if(ast){
+            if(!HIERARCHY[r][a][ast])HIERARCHY[r][a][ast]=[];
+            if(field&&HIERARCHY[r][a][ast].indexOf(field)===-1)HIERARCHY[r][a][ast].push(field);
+          }
+        }
+      }
+    });
+    // Also store raw fields data for map coordinates etc
+    window._fieldsData=items.map(function(f){
+      return {title:toStr(f.Title),region:getLookupVal(f.Region),area:getLookupVal(f.Area),asset:getLookupVal(f.Asset),lat:f.Lat||null,lng:f.Long||null,waterDepth:f.Water_x0020_Depth||f.WaterDepth||null,locationType:toStr(f.LocationType||f.Location_x0020_Type),subType:toStr(f.SubType||f.Sub_x002d_Type)};
+    });
+    // Build lookup ID maps: display value -> SharePoint lookup ID
+    // For Region, Area, Asset: collect from RBP-Fields lookup columns
+    window._lookupIds={region:{},area:{},asset:{},field:{}};
+    items.forEach(function(f){
+      var rVal=getLookupVal(f.Region),rId=getLookupId(f.Region);
+      var aVal=getLookupVal(f.Area),aId=getLookupId(f.Area);
+      var astVal=getLookupVal(f.Asset),astId=getLookupId(f.Asset);
+      var fId=f.ID||f.Id||0;
+      var fVal=toStr(f.Title);
+      if(rVal&&rId)window._lookupIds.region[rVal]=rId;
+      if(aVal&&aId)window._lookupIds.area[aVal]=aId;
+      if(astVal&&astId)window._lookupIds.asset[astVal]=astId;
+      if(fVal&&fId)window._lookupIds.field[fVal]=fId;
+    });
+    console.log('Lookups loaded:',Object.keys(HIERARCHY).length,'regions,',items.length,'fields');
+    if(callback)callback();
+  }).catch(function(err){
+    console.error('Lookups error:',err);
+    // Fall back to building from activities data
+    if(callback)callback();
+  });
+}
+</script>
+</body>
+</html>
