@@ -61,14 +61,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .act-group-hdr{font-size:9px;font-weight:600;color:var(--text-sec);padding:6px 16px 2px;display:flex;gap:6px;}
 .act-group-hdr .asset{color:var(--text);}
 .act-group-hdr .field{color:var(--text-tri);}
-.act-row{display:flex;align-items:center;min-height:28px;padding:0 0 0 16px;transition:background 0.08s;}
-.act-row:hover{background:rgba(45,108,180,0.03);}
+.act-row{display:flex;align-items:center;min-height:28px;padding:0 0 0 16px;}
 .act-label{width:180px;min-width:180px;padding-right:8px;}
 .act-title{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .act-sub{font-size:8px;color:var(--text-tri);margin-top:1px;display:flex;gap:4px;align-items:center;}
 .act-track{flex:1;position:relative;height:20px;}
-.act-bar{position:absolute;height:16px;top:2px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:7px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;cursor:pointer;}
-.act-bar *{pointer-events:none;}
+.act-bar{position:absolute;height:16px;top:2px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:7px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;}
 .act-bar-window{position:absolute;height:16px;top:2px;border-radius:3px;border:1.5px dashed;opacity:0.25;}
 
 /* SubType badges */
@@ -95,17 +93,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
   .content{overflow:visible;padding:0;}
   .camp-card{break-inside:avoid;page-break-inside:avoid;border:none;box-shadow:none;}
 }
-
-/* Activity popup */
-.act-popup{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.12);padding:14px 16px;z-index:100;min-width:260px;max-width:340px;font-size:11px;opacity:0;pointer-events:none;transition:opacity 0.12s;}
-.act-popup.open{opacity:1;pointer-events:auto;}
-.act-popup-title{font-size:13px;font-weight:700;margin-bottom:8px;padding-right:20px;}
-.act-popup-close{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-sec);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;}
-.act-popup-close:hover{background:var(--bg);}
-.act-popup-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border-light);}
-.act-popup-row:last-child{border-bottom:none;}
-.act-popup-lbl{color:var(--text-tri);font-size:10px;}
-.act-popup-val{font-weight:500;text-align:right;max-width:180px;}
 </style>
 </head>
 <body>
@@ -124,11 +111,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
   <div class="content" id="content">
     <div class="no-selection">Select one or more campaigns above to view their schedules.</div>
   </div>
-</div>
-
-<div class="act-popup" id="actPopup">
-  <button class="act-popup-close" onclick="closePopup()">&times;</button>
-  <div id="actPopupContent"></div>
 </div>
 
 <!-- Help overlay -->
@@ -344,14 +326,14 @@ function renderContent(){
       var barCls=getBarClass(act.subType);
       var dur=daysBetween(act.from,act.to);
 
-      html+='<div class="act-row" style="cursor:pointer;" onclick="showActPopup(event,\''+escHtml(c.id).replace(/'/g,'')+'\','+ai+')">';
+      html+='<div class="act-row">';
       html+='<div class="act-label"><div class="act-title">'+escHtml(act.title)+'</div>';
       html+='<div class="act-sub">'+getSubTypeBadge(act.subType);
       if(act.vessel&&act.vessel!==c.vessel)html+=' <span style="color:var(--accent);font-weight:600;">'+escHtml(act.vessel)+'</span>';
       else if(act.vessel)html+=' '+escHtml(act.vessel);
       html+='</div></div>';
       html+='<div class="act-track">';
-      html+='<div class="act-bar'+barCls+'" style="left:'+l+'%;width:'+w+'%;background:'+barCol+';cursor:pointer;" onclick="showActPopup(event,\''+escHtml(c.id).replace(/'/g,'')+'\','+ai+')" title="'+escHtml(act.title)+' ('+dur+'d)">'+escHtml(act.title)+'</div>';
+      html+='<div class="act-bar'+barCls+'" style="left:'+l+'%;width:'+w+'%;background:'+barCol+';" title="'+escHtml(act.title)+' ('+dur+'d)">'+escHtml(act.title)+'</div>';
       html+='</div></div>';
     });
 
@@ -372,58 +354,6 @@ function renderContent(){
   content.innerHTML=html;
 }
 
-function showActPopup(event,campId,actIdx){
-  event.stopPropagation();
-  var camp=campaigns.find(function(c){return c.id===campId;});
-  if(!camp||!camp.l2[actIdx])return;
-  var act=camp.l2[actIdx];
-  var dur=daysBetween(act.from,act.to);
-  var col=getColor(act.grouping||camp.grouping);
-
-  var html='<div class="act-popup-title"><span class="grp-dot" style="background:'+col+';margin-right:4px;"></span>'+escHtml(act.title)+'</div>';
-
-  function row(label,val){if(!val)return'';return'<div class="act-popup-row"><span class="act-popup-lbl">'+label+'</span><span class="act-popup-val">'+escHtml(val)+'</span></div>';}
-
-  html+=row('Campaign',camp.name);
-  html+=row('SubType',act.subType);
-  html+=row('Vessel',act.vessel||camp.vessel);
-  html+=row('Grouping',act.grouping||camp.grouping);
-  html+=row('Asset',act.asset);
-  html+=row('Field',act.field);
-  html+=row('SPA',act.spa||camp.spa);
-  html+=row('Organisation',camp.org);
-  html+=row('Status',camp.status);
-  html+=row('From',fmtDate(act.rawFrom||act.from));
-  html+=row('To',fmtDate(act.rawTo||act.to));
-  html+=row('Duration',dur+' days');
-  html+=row('Sequence',(actIdx+1)+' of '+camp.l2.length);
-
-  document.getElementById('actPopupContent').innerHTML=html;
-  var popup=document.getElementById('actPopup');
-  popup.classList.add('open');
-
-  // Position near click
-  var pw=popup.offsetWidth,ph=popup.offsetHeight;
-  var x=event.clientX+12,y=event.clientY-20;
-  if(x+pw>window.innerWidth-10)x=event.clientX-pw-12;
-  if(y+ph>window.innerHeight-10)y=window.innerHeight-ph-10;
-  if(y<10)y=10;
-  popup.style.left=x+'px';
-  popup.style.top=y+'px';
-}
-
-function closePopup(){
-  document.getElementById('actPopup').classList.remove('open');
-}
-
-// Close popup on outside click
-document.addEventListener('click',function(e){
-  var popup=document.getElementById('actPopup');
-  if(popup.classList.contains('open')&&!popup.contains(e.target)&&!e.target.closest('.act-bar')&&!e.target.closest('.act-row')){
-    closePopup();
-  }
-});
-
 function toggleHelp(){
   var o=document.getElementById('helpOverlay');
   var isOpen=o.style.opacity==='1';
@@ -431,7 +361,7 @@ function toggleHelp(){
   o.style.pointerEvents=isOpen?'none':'auto';
 }
 
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closePopup();toggleHelp();}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')toggleHelp();});
 
 // Data input
 window.addEventListener('message',function(event){
