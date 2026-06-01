@@ -571,10 +571,10 @@ function renderSimopCard(p){
   var tRange=tMax-tMin;if(tRange<=0)tRange=86400000;
   function miniPct(t){return((t-tMin)/tRange)*100;}
 
-  var html='<div style="margin:6px 16px 10px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:#fafaf7;">';
+  var html='<div style="margin:6px 16px 10px;border:1px solid var(--border);border-radius:6px;background:#fafaf7;overflow:hidden;">';
 
-  // Header: two campaign names
-  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+  // Header row
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border-light);">';
   html+='<div style="flex:1;"><div style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;"><span class="grp-dot" style="background:'+col1+';"></span>'+escHtml(p.camp1)+'</div>';
   html+='<div style="font-size:9px;color:var(--text-sec);margin-top:1px;">'+escHtml(v1)+'</div></div>';
   html+='<div style="text-align:center;padding:0 12px;"><div style="font-size:8px;color:var(--text-tri);text-transform:uppercase;">Overlap</div>';
@@ -583,14 +583,15 @@ function renderSimopCard(p){
   html+='<div style="font-size:9px;color:var(--text-sec);margin-top:1px;">'+escHtml(v2)+'</div></div>';
   html+='</div>';
 
-  // Flags
+  // Flags row
   var flags=[];
   if(p.sameVessel)flags.push('<span style="font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fce4e4;color:#c45222;">⚠ SAME VESSEL</span>');
   if(uniqueFields.length>0)flags.push('<span style="font-size:8px;padding:2px 6px;border-radius:3px;background:#fef3cd;color:#856404;">Fields: '+escHtml(uniqueFields.join(', '))+'</span>');
   flags.push('<span style="font-size:8px;color:var(--text-tri);">'+fmtDate(new Date(p.overlapStart).toISOString().slice(0,10))+' — '+fmtDate(new Date(p.overlapEnd).toISOString().slice(0,10))+'</span>');
-  if(flags.length>0)html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">'+flags.join('')+'</div>';
+  html+='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 14px;border-bottom:1px solid var(--border-light);">'+flags.join('')+'</div>';
 
   // Mini overlap timeline
+  html+='<div style="padding:8px 14px;border-bottom:1px solid var(--border-light);">';
   html+='<div style="position:relative;height:40px;background:#f0efeb;border-radius:4px;overflow:hidden;">';
 
   // Overlap zone highlight
@@ -612,15 +613,60 @@ function renderSimopCard(p){
     html+='<div style="position:absolute;left:'+l+'%;width:'+w+'%;top:24px;height:12px;border-radius:2px;background:'+col2+';opacity:0.8;" title="'+escHtml(a.Title)+'"></div>';
   });
 
-  html+='</div>';
+  html+='</div></div>';
 
-  // Activity counts
-  var a1Count=Object.keys(p.activities1).length;
-  var a2Count=Object.keys(p.activities2).length;
-  html+='<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:8px;color:var(--text-tri);">';
-  html+='<span>'+a1Count+' activit'+(a1Count>1?'ies':'y')+'</span>';
-  html+='<span>'+a2Count+' activit'+(a2Count>1?'ies':'y')+'</span>';
-  html+='</div>';
+  // Detail table - specific overlapping activity pairs
+  html+='<div style="overflow-x:auto;">';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:9px;">';
+  html+='<thead><tr style="background:#f0efeb;">';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Activity</th>';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Vessel</th>';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Field</th>';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">vs Activity</th>';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Vessel</th>';
+  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Field</th>';
+  html+='<th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Days</th>';
+  html+='</tr></thead><tbody>';
+
+  // Generate specific overlap pairs from the activities
+  var acts1=Object.values(p.activities1);
+  var acts2=Object.values(p.activities2);
+  var detailRows=[];
+  acts1.forEach(function(a){
+    var aS=new Date(a.CappedStart||a.From).getTime();
+    var aE=new Date(a.CappedEnd||a.To).getTime();
+    acts2.forEach(function(b){
+      var bS=new Date(b.CappedStart||b.From).getTime();
+      var bE=new Date(b.CappedEnd||b.To).getTime();
+      if(aS<bE&&bS<aE){
+        var oS=Math.max(aS,bS);var oE=Math.min(aE,bE);
+        var oD=Math.round((oE-oS)/86400000);
+        if(oD>0){
+          var sameField=a.Field&&b.Field&&a.Field===b.Field;
+          var sameVes=a.Vessel&&b.Vessel&&a.Vessel===b.Vessel;
+          detailRows.push({a:a,b:b,days:oD,sameField:sameField,sameVessel:sameVes});
+        }
+      }
+    });
+  });
+
+  detailRows.sort(function(a,b){return b.days-a.days;});
+
+  detailRows.forEach(function(d){
+    var rowBg=d.sameVessel?'background:#fce4e4;':d.sameField?'background:#fef9e6;':'';
+    html+='<tr style="'+rowBg+'">';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);font-weight:500;"><span class="grp-dot" style="background:'+col1+';"></span>'+escHtml(d.a.Title)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.a.Vessel)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.a.Field)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);font-weight:500;"><span class="grp-dot" style="background:'+col2+';"></span>'+escHtml(d.b.Title)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.b.Vessel)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.b.Field)+'</td>';
+    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);text-align:center;font-family:var(--mono);font-weight:600;'+(d.days>14?'color:#c45222;':'')+'">'+d.days+'d';
+    if(d.sameVessel)html+=' <span style="font-size:7px;color:#c45222;">⚠</span>';
+    html+='</td></tr>';
+  });
+
+  html+='</tbody></table></div>';
 
   html+='</div>';
   return html;
