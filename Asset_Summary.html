@@ -462,14 +462,16 @@ function buildSimops(rows){
     var a=workRows[i];
     var aStart=new Date(a.CappedStart||a.From).getTime();
     var aEnd=new Date(a.CappedEnd||a.To).getTime();
-    var aCamp=a.ParentCampaign||a.Title;
+    var aCamp=(a.ParentCampaign||'').trim()||a.Title;
 
     for(var j=i+1;j<workRows.length;j++){
       var b=workRows[j];
-      var bCamp=b.ParentCampaign||b.Title;
+      var bCamp=(b.ParentCampaign||'').trim()||b.Title;
 
-      // Skip activities in the same campaign
-      if(aCamp===bCamp)continue;
+      // Skip activities in the same campaign (multi-vessel campaigns can overlap intentionally)
+      if(aCamp.toLowerCase()===bCamp.toLowerCase())continue;
+      // Also skip if one activity's campaign name matches the other's parent
+      if(a.Title.toLowerCase()===bCamp.toLowerCase()||b.Title.toLowerCase()===aCamp.toLowerCase())continue;
 
       var bStart=new Date(b.CappedStart||b.From).getTime();
       var bEnd=new Date(b.CappedEnd||b.To).getTime();
