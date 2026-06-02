@@ -68,7 +68,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .table-wrap{flex:1;overflow:auto;padding:0 20px 20px;}
 .tbl{width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
 .tbl th{padding:7px 8px;text-align:left;font-size:8px;font-weight:600;color:var(--text-tri);text-transform:uppercase;letter-spacing:0.3px;background:#fafaf7;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;}
-.tbl td{padding:5px 8px;border-bottom:1px solid var(--border-light);vertical-align:middle;white-space:nowrap;}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--border-light);vertical-align:middle;font-size:11px;}
+.tbl td.wrap-cell{white-space:normal;word-wrap:break-word;max-width:160px;}
+.tbl td.nowrap-cell{white-space:nowrap;}
+.tbl td[ondblclick]{cursor:text;}
+.tbl td[ondblclick]:hover{background:rgba(45,108,180,0.04);}
 .tbl tr{transition:background 0.08s;}
 .tbl tr:hover{background:rgba(45,108,180,0.02);}
 .tbl tr.l1-row{background:#fafaf7;}
@@ -279,9 +283,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 </div>
 
 <!-- Modal -->
-<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="modalOverlay">>
   <div class="modal">
     <h2 id="modalTitle">Add Activity</h2>
+    <div id="l1Warning" style="display:none;background:#fce4e4;border:1px solid #f5c6c6;border-radius:5px;padding:8px 12px;margin-bottom:10px;font-size:10px;color:#c45222;line-height:1.5;"><b>Campaign mode:</b> Only use + Campaign for activities with multiple L2 sub-activities. For single line entries, use + Standalone instead. Area, Asset and Field will be set at L2 level.</div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="fTitle"></div>
     </div>
@@ -310,10 +315,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="form-group" style="max-width:80px;"><label class="form-label">Duration</label><input class="form-input" type="number" min="1" id="fDuration" placeholder="days" onchange="calcModalDates('dur')" style="text-align:center;"></div>
       <div class="form-group"><label class="form-label">To</label><input class="form-input" type="date" id="fTo" onchange="calcModalDates('to')"></div>
     </div>
+    <div class="form-row" style="border-top:1px solid var(--border-light);padding-top:10px;margin-top:6px;">
+      <div class="form-group"><label class="form-label">Window From <span style="font-size:8px;color:var(--text-tri);">(Earliest mob date)</span></label><input class="form-input" type="date" id="fWinFrom" onchange="calcWindow()"></div>
+    </div>
+    <div class="form-row" id="winCalcRow">
+      <div class="form-group"><label class="form-label">Latest mob date</label><input class="form-input" type="date" id="fWinLateMob" onchange="calcWindow()"></div>
+      <div class="form-group" style="max-width:80px;"><label class="form-label">or Duration</label><input class="form-input" type="number" min="1" id="fWinMobDuration" placeholder="days" onchange="calcWindowFromMobDur()" style="text-align:center;"></div>
+      <div class="form-group" style="max-width:100px;"><label class="form-label">Contingency</label><input class="form-input" type="number" min="0" id="fWinContingency" placeholder="days" onchange="calcWindow()" style="text-align:center;"></div>
+    </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Window From</label><input class="form-input" type="date" id="fWinFrom" onchange="calcModalWinDates('from')"></div>
-      <div class="form-group" style="max-width:80px;"><label class="form-label">Duration</label><input class="form-input" type="number" min="1" id="fWinDuration" placeholder="days" onchange="calcModalWinDates('dur')" style="text-align:center;"></div>
-      <div class="form-group"><label class="form-label">Window To</label><input class="form-input" type="date" id="fWinTo" onchange="calcModalWinDates('to')"></div>
+      <div class="form-group"><label class="form-label">Window To <span style="font-size:8px;color:var(--text-tri);">(Auto-calculated)</span></label><input class="form-input" type="date" id="fWinTo" onchange=""></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Planned/Emergent</label><select class="form-select" id="fPE"></select></div>
@@ -556,7 +567,7 @@ function mapSPItem(sp){
   };
 }
 
-function loadActivities(region){
+function loadActivities(region,callback){
   isLoading=true;
   showToast('Loading '+region+' activities...');
   document.getElementById('mainBody').innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--text-tri);">Loading...</td></tr>';
@@ -620,6 +631,7 @@ function loadActivities(region){
     populateFilterDropdowns();
     render();
     showToast(activities.length+' activities loaded');
+    if(callback)callback();
   }).catch(function(err){
     isLoading=false;
     console.error('Load error:',err);
@@ -718,10 +730,62 @@ function sortBy(field){
 }
 
 function toggleCompleted(){
+
   hideCompleted=!hideCompleted;
   document.getElementById('completedToggle').classList.toggle('active',!hideCompleted);
   document.getElementById('completedToggle').textContent=hideCompleted?'Show completed':'Hide completed';
   render();
+}
+
+function inlineEdit(td,id,field){
+  if(td.querySelector('input'))return; // Already editing
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  var oldVal=a[field]||'';
+  var input=document.createElement('input');
+  input.value=oldVal;
+  input.style.cssText='width:100%;font-family:var(--font);font-size:11px;padding:2px 4px;border:1px solid var(--accent);border-radius:3px;outline:none;background:#fff;';
+  input.onkeydown=function(e){
+    if(e.key==='Enter'){inlineSave(td,id,field,input.value,oldVal);}
+    if(e.key==='Escape'){td.textContent=oldVal;} // Cancel
+  };
+  input.onblur=function(){inlineSave(td,id,field,input.value,oldVal);};
+  td.textContent='';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function inlineSave(td,id,field,newVal,oldVal){
+  if(newVal===oldVal){td.textContent=oldVal;return;}
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  a[field]=newVal;
+  // Build save payload
+  var ids=window._lookupIds||{region:{},area:{},asset:{},field:{}};
+  var spaEmail=(window._spaEmailMap||{})[a.spa]||'';
+  var item={
+    id:a.id,title:a.title,region:a.region,area:a.area,asset:a.asset,field:a.field,
+    vessel:a.vessel,contractor:a.contractor||'',grouping:a.grouping,status:a.status,
+    spa:a.spa,org:a.org,from:a.from,to:a.to,winFrom:a.winFrom||'',winTo:a.winTo||'',
+    pe:a.pe,cvr:a.cvr||'No',mmsi:a.mmsi||'0',bpe:a.bpe||'',level:a.level,
+    regionId:ids.region[a.region]||a.regionId||null,
+    areaId:a.area?ids.area[a.area]||a.areaId||null:-1,
+    assetId:a.asset?ids.asset[a.asset]||a.assetId||null:-1,
+    fieldId:a.field?ids.field[a.field]||a.fieldId||null:-1,
+    spaClaims:spaEmail?'i:0#.f|membership|'+spaEmail:''
+  };
+  td.textContent=newVal;
+  td.style.background='#fef9e6';
+  apiCall({action:'saveItem',item:item}).then(function(){
+    td.style.background='';
+    showToast(field+' updated');
+  }).catch(function(err){
+    td.style.background='#fce4e4';
+    a[field]=oldVal;td.textContent=oldVal;
+    showToast('Save failed: '+err.message);
+    setTimeout(function(){td.style.background='';},2000);
+  });
 }
 
 function getFiltered(){
@@ -768,14 +832,14 @@ function render(){
     var tr=document.createElement('tr');
     tr.className=a.level==='L1'?'l1-row':'';
     tr.innerHTML='<td><span class="level-badge '+levelCls+'">'+a.level+'</span></td>'+
-      '<td style="font-weight:500;">'+escHtml(a.title)+'</td>'+
-      '<td>'+escHtml(a.area)+'</td><td>'+escHtml(a.asset)+'</td>'+
-      '<td>'+escHtml(a.vessel)+'</td>'+
-      '<td><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(a.grouping)+'</td>'+
-      '<td>'+escHtml(a.spa)+'</td><td>'+escHtml(a.org)+'</td>'+
-      '<td><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
-      '<td class="date-cell">'+fmtDate(a.from)+'</td><td class="date-cell">'+fmtDate(a.to)+'</td>'+
-      '<td class="date-cell">'+fmtDate(a.winFrom)+'</td><td class="date-cell">'+fmtDate(a.winTo)+'</td>'+
+      '<td class="wrap-cell" style="font-weight:500;" ondblclick="inlineEdit(this,'+a.id+',\'title\')">'+escHtml(a.title)+'</td>'+
+      '<td class="nowrap-cell">'+escHtml(a.area)+'</td><td class="nowrap-cell">'+escHtml(a.asset)+'</td>'+
+      '<td class="nowrap-cell" ondblclick="inlineEdit(this,'+a.id+',\'vessel\')">'+escHtml(a.vessel)+'</td>'+
+      '<td class="nowrap-cell"><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(a.grouping)+'</td>'+
+      '<td class="wrap-cell" ondblclick="inlineEdit(this,'+a.id+',\'spa\')">'+escHtml(a.spa)+'</td><td class="nowrap-cell">'+escHtml(a.org)+'</td>'+
+      '<td class="nowrap-cell"><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
+      '<td class="date-cell nowrap-cell">'+fmtDate(a.from)+'</td><td class="date-cell nowrap-cell">'+fmtDate(a.to)+'</td>'+
+      '<td class="date-cell nowrap-cell">'+fmtDate(a.winFrom)+'</td><td class="date-cell nowrap-cell">'+fmtDate(a.winTo)+'</td>'+
       '<td>'+(l2Count>0?'<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>':'')+'</td>'+
       '<td><div style="display:flex;gap:3px;"><button class="btn btn-sm btn-icon" onclick="openEditModal('+a.id+')" title="Edit">&#9998;</button>'+(a.level==='Standalone'?'<button class="btn btn-sm" onclick="convertToCampaign('+a.id+')" title="Convert to campaign" style="font-size:8px;">&#8594; L1</button>':'')+'</div></td>';
     body.appendChild(tr);
@@ -1094,11 +1158,21 @@ var editingId=null,addingLevel='Standalone';
 function openAddModal(level){
   editingId=null;addingLevel=level;
   document.getElementById('modalTitle').textContent='Add '+(level==='L1'?'Campaign':'Standalone Activity');
-  ['fTitle','fVessel','fContractor','fFrom','fTo','fDuration','fWinFrom','fWinTo','fWinDuration','fMMSI','fBPE'].forEach(function(id){document.getElementById(id).value='';});
+  ['fTitle','fVessel','fContractor','fFrom','fTo','fDuration','fWinFrom','fWinTo','fWinMobDuration','fWinContingency','fWinLateMob','fMMSI','fBPE'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  // Reset window calculation fields
+  var wCalc=document.getElementById('winCalcRow');if(wCalc)wCalc.style.display='';
   var rgn=document.getElementById('regionSelect').value;
   setModalCascade(rgn,'','','');
   document.getElementById('fSPA').value='';
   document.getElementById('fOrg').value='';
+  // L1 campaign: show warning, disable area/asset/field
+  var isL1=level==='L1';
+  document.getElementById('l1Warning').style.display=isL1?'block':'none';
+  ['fArea','fAsset','fField'].forEach(function(id){
+    var el=document.getElementById(id);
+    el.disabled=isL1;
+    el.style.opacity=isL1?'0.4':'1';
+  });
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -1107,6 +1181,12 @@ function openEditModal(id){
   if(!a)return;
   editingId=id;addingLevel=a.level;
   document.getElementById('modalTitle').textContent='Edit: '+a.title;
+  // Hide L1 warning and enable all fields on edit
+  document.getElementById('l1Warning').style.display='none';
+  ['fArea','fAsset','fField'].forEach(function(fid){
+    var el=document.getElementById(fid);
+    el.disabled=false;el.style.opacity='1';
+  });
   document.getElementById('fTitle').value=a.title;
   setModalCascade(a.region,a.area,a.asset,a.field);
   document.getElementById('fVessel').value=a.vessel;
@@ -1120,7 +1200,10 @@ function openEditModal(id){
   if(a.from&&a.to){var d=daysBetween(a.from,a.to)+1;document.getElementById('fDuration').value=d>0?d:'';}else{document.getElementById('fDuration').value='';}
   document.getElementById('fWinFrom').value=a.winFrom||'';
   document.getElementById('fWinTo').value=a.winTo||'';
-  if(a.winFrom&&a.winTo){var wd=daysBetween(a.winFrom,a.winTo)+1;document.getElementById('fWinDuration').value=wd>0?wd:'';}else{document.getElementById('fWinDuration').value='';}
+  // Clear calculation fields on edit (user can recalculate)
+  var wMobDur=document.getElementById('fWinMobDuration');if(wMobDur)wMobDur.value='';
+  var wCont=document.getElementById('fWinContingency');if(wCont)wCont.value='';
+  var wLateMob=document.getElementById('fWinLateMob');if(wLateMob)wLateMob.value='';
   document.getElementById('fPE').value=a.pe;
   document.getElementById('fCVR').value=a.cvr;
   document.getElementById('fMMSI').value=a.mmsi||'';
@@ -1132,6 +1215,26 @@ function closeModal(){document.getElementById('modalOverlay').classList.remove('
 
 function saveModal(){
   var data={title:document.getElementById('fTitle').value,region:document.getElementById('fRegion').value,area:document.getElementById('fArea').value,asset:document.getElementById('fAsset').value,field:document.getElementById('fField').value,vessel:document.getElementById('fVessel').value,contractor:document.getElementById('fContractor').value,grouping:document.getElementById('fGrouping').value,status:document.getElementById('fStatus').value,spa:document.getElementById('fSPA').value,org:document.getElementById('fOrg').value,from:document.getElementById('fFrom').value,to:document.getElementById('fTo').value,winFrom:document.getElementById('fWinFrom').value,winTo:document.getElementById('fWinTo').value,pe:document.getElementById('fPE').value,cvr:document.getElementById('fCVR').value,mmsi:document.getElementById('fMMSI').value,bpe:document.getElementById('fBPE').value};
+
+  // Required field validation
+  var missing=[];
+  if(!data.title)missing.push('Title');
+  if(!data.region)missing.push('Region');
+  if(!data.vessel)missing.push('Vessel');
+  if(!data.mmsi&&data.mmsi!=='0')missing.push('MMSI (enter 0 if no vessel — obtain MMSI from Marine Traffic for vessels)');
+  if(!data.from&&addingLevel!=='L1')missing.push('From');
+  if(!data.to&&addingLevel!=='L1')missing.push('To');
+  if(!data.spa)missing.push('SPA');
+  if(!data.grouping)missing.push('Grouping/Nature of scope');
+  if(!data.org)missing.push('Organisation');
+  if(!data.status)missing.push('Status');
+  if(!data.pe)missing.push('Planned/Emergent');
+
+  if(missing.length>0){
+    var msg='Please complete the following required fields:\n\n• '+missing.join('\n• ');
+    alert(msg);
+    return;
+  }
 
   // Resolve lookup IDs for SharePoint
   var ids=window._lookupIds||{region:{},area:{},asset:{},field:{}};
@@ -1167,6 +1270,19 @@ function saveModal(){
         closeModal();
         loadActivities(document.getElementById('regionSelect').value);
         showToast('Campaign saved but L2 references may need updating');
+      });
+    }else if(!editingId&&data.level==='L1'){
+      // New L1 campaign - reload then open L2 editor
+      closeModal();
+      loadActivities(document.getElementById('regionSelect').value,function(){
+        // Find the newly created campaign by title
+        var newCamp=activities.find(function(a){return a.title===data.title&&a.level==='L1';});
+        if(newCamp){
+          openL2Page(newCamp.id);
+          showToast('Campaign created — add L2 activities below');
+        }else{
+          showToast('Campaign created');
+        }
       });
     }else{
       closeModal();
@@ -1236,19 +1352,40 @@ function calcModalDates(changed){
 }
 
 function calcModalWinDates(changed){
-  var from=document.getElementById('fWinFrom').value;
-  var dur=parseInt(document.getElementById('fWinDuration').value)||0;
-  var to=document.getElementById('fWinTo').value;
-  if(changed==='from'&&from&&dur>0){
-    document.getElementById('fWinTo').value=addDays(from,dur-1);
-  }else if(changed==='dur'&&from&&dur>0){
-    document.getElementById('fWinTo').value=addDays(from,dur-1);
-  }else if(changed==='to'&&from&&to){
-    var d=daysBetween(from,to)+1;
-    if(d>0)document.getElementById('fWinDuration').value=d;
-  }else if(changed==='from'&&from&&to){
-    var d=daysBetween(from,to)+1;
-    if(d>0)document.getElementById('fWinDuration').value=d;
+  // Legacy - kept for compatibility
+  calcWindow();
+}
+
+function calcWindowFromMobDur(){
+  // Calculate latest mob date from Window From + mob duration
+  var winFrom=document.getElementById('fWinFrom').value;
+  var mobDur=parseInt(document.getElementById('fWinMobDuration').value)||0;
+  if(winFrom&&mobDur>0){
+    document.getElementById('fWinLateMob').value=addDays(winFrom,mobDur-1);
+  }
+  calcWindow();
+}
+
+function calcWindow(){
+  // Window To = Latest mob date + campaign duration + contingency
+  var lateMob=document.getElementById('fWinLateMob').value;
+  var campDur=parseInt(document.getElementById('fDuration').value)||0;
+  var contingency=parseInt(document.getElementById('fWinContingency').value)||0;
+
+  if(lateMob&&campDur>0){
+    // Window To = latest mob + campaign duration + contingency - 1 (inclusive)
+    var totalDays=campDur+contingency;
+    document.getElementById('fWinTo').value=addDays(lateMob,totalDays-1);
+  }else if(lateMob){
+    // No campaign duration yet - just use latest mob + contingency
+    document.getElementById('fWinTo').value=addDays(lateMob,contingency);
+  }
+
+  // Also update mob duration if we have from and late mob
+  var winFrom=document.getElementById('fWinFrom').value;
+  if(winFrom&&lateMob&&!document.getElementById('fWinMobDuration').value){
+    var d=daysBetween(winFrom,lateMob)+1;
+    if(d>0)document.getElementById('fWinMobDuration').value=d;
   }
 }
 
@@ -1348,7 +1485,7 @@ document.addEventListener('click',function(e){
   }
 });
 
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeL2Page();closeModal();toggleHelp(true);}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeL2Page();toggleHelp(true);}});
 
 function toggleHelp(forceClose){
   var o=document.getElementById('helpOverlay');
