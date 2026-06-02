@@ -7,7 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f6f5f1;--surface:#ffffff;--border:#e2e0d8;--border-light:#eeece6;--text:#1a1a18;--text-sec:#6b6a65;--text-tri:#9c9b95;--accent:#2d6cb4;--accent-light:#e8f0fa;--font:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;}
-*{box-sizing:border-box;margin:0;padding:0;}
+*{box-sizing:border-box;margin:0;padding:0;scrollbar-width:none;}
+*::-webkit-scrollbar{width:0 !important;height:0 !important;}
 html,body{margin:0;padding:0;overflow:hidden;height:100%;}
 body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
 .app{height:100%;display:flex;flex-direction:column;}
@@ -455,9 +456,8 @@ function buildSimops(rows){
     return st==='work'||!st;
   });
 
-  // Find overlaps grouped by campaign pair
-  var pairMap={};
-
+  // Find all overlaps
+  var overlaps=[];
   for(var i=0;i<workRows.length;i++){
     var a=workRows[i];
     var aStart=new Date(a.CappedStart||a.From).getTime();
@@ -480,194 +480,171 @@ function buildSimops(rows){
         var overlapDays=Math.round((overlapEnd-overlapStart)/86400000);
         if(overlapDays<=0)continue;
 
-        // Group by campaign pair (sorted alphabetically)
-        var camps=[aCamp,bCamp].sort();
-        var pairKey=camps[0]+'|||'+camps[1];
-        var isFieldLevel=a.Field&&b.Field&&a.Field===b.Field;
+        var sameField=a.Field&&b.Field&&a.Field===b.Field;
         var sameVessel=a.Vessel&&b.Vessel&&a.Vessel===b.Vessel;
 
-        if(!pairMap[pairKey]){
-          pairMap[pairKey]={
-            camp1:camps[0],camp2:camps[1],
-            overlapStart:overlapStart,overlapEnd:overlapEnd,
-            overlapDays:overlapDays,
-            fieldLevel:isFieldLevel,sameVessel:sameVessel,
-            fields:[],vessels1:{},vessels2:{},
-            activities1:{},activities2:{}
-          };
-        }
-        var p=pairMap[pairKey];
-        // Expand overlap window
-        if(overlapStart<p.overlapStart)p.overlapStart=overlapStart;
-        if(overlapEnd>p.overlapEnd)p.overlapEnd=overlapEnd;
-        p.overlapDays=Math.round((p.overlapEnd-p.overlapStart)/86400000);
-        if(isFieldLevel)p.fieldLevel=true;
-        if(sameVessel)p.sameVessel=true;
-        if(isFieldLevel&&a.Field)p.fields.push(a.Field);
-        // Track unique activities and vessels per side
-        var side1=aCamp===camps[0]?a:b;
-        var side2=aCamp===camps[0]?b:a;
-        p.activities1[side1.Title]=side1;
-        p.activities2[side2.Title]=side2;
-        if(side1.Vessel)p.vessels1[side1.Vessel]=true;
-        if(side2.Vessel)p.vessels2[side2.Vessel]=true;
+        overlaps.push({
+          a:a,b:b,aCamp:aCamp,bCamp:bCamp,
+          overlapStart:overlapStart,overlapEnd:overlapEnd,
+          overlapDays:overlapDays,
+          sameField:sameField,sameVessel:sameVessel,
+          fieldLevel:sameField
+        });
       }
     }
   }
 
-  var pairs=Object.values(pairMap);
-  if(pairs.length===0){
+  if(overlaps.length===0){
     return'<div class="section"><div class="section-hdr">SIMOPS Analysis</div><div style="padding:16px;font-size:11px;color:var(--text-tri);">No SIMOPS detected — no overlapping work activities from different campaigns on this asset.</div></div>';
   }
 
-  // Sort: field-level first, then by overlap days descending
-  pairs.sort(function(a,b){
-    if(a.fieldLevel!==b.fieldLevel)return a.fieldLevel?-1:1;
-    return b.overlapDays-a.overlapDays;
+  // Count overlaps per activity to find anchors
+  var actOverlapCount={};
+  overlaps.forEach(function(o){
+    var keyA=o.a.Title+'|'+o.aCamp;
+    var keyB=o.b.Title+'|'+o.bCamp;
+    actOverlapCount[keyA]=(actOverlapCount[keyA]||0)+1;
+    actOverlapCount[keyB]=(actOverlapCount[keyB]||0)+1;
   });
 
-  var fieldPairs=pairs.filter(function(p){return p.fieldLevel;});
-  var assetPairs=pairs.filter(function(p){return!p.fieldLevel;});
+  // Anchor = activity with 3+ overlaps, or duration > 60 days
+  var anchors={};
+  overlaps.forEach(function(o){
+    var keyA=o.a.Title+'|'+o.aCamp;
+    var keyB=o.b.Title+'|'+o.bCamp;
+    var durA=daysBetween(o.a.CappedStart||o.a.From,o.a.CappedEnd||o.a.To);
+    var durB=daysBetween(o.b.CappedStart||o.b.From,o.b.CappedEnd||o.b.To);
+    var isAnchorA=actOverlapCount[keyA]>=3||durA>60;
+    var isAnchorB=actOverlapCount[keyB]>=3||durB>60;
+
+    if(isAnchorA&&!isAnchorB){
+      if(!anchors[keyA])anchors[keyA]={act:o.a,camp:o.aCamp,overlaps:[]};
+      anchors[keyA].overlaps.push({act:o.b,camp:o.bCamp,overlapDays:o.overlapDays,overlapStart:o.overlapStart,overlapEnd:o.overlapEnd,sameField:o.sameField,sameVessel:o.sameVessel});
+    }else if(isAnchorB&&!isAnchorA){
+      if(!anchors[keyB])anchors[keyB]={act:o.b,camp:o.bCamp,overlaps:[]};
+      anchors[keyB].overlaps.push({act:o.a,camp:o.aCamp,overlapDays:o.overlapDays,overlapStart:o.overlapStart,overlapEnd:o.overlapEnd,sameField:o.sameField,sameVessel:o.sameVessel});
+    }else if(isAnchorA&&isAnchorB){
+      // Both are anchors — assign to the longer-duration one
+      if(durA>=durB){
+        if(!anchors[keyA])anchors[keyA]={act:o.a,camp:o.aCamp,overlaps:[]};
+        anchors[keyA].overlaps.push({act:o.b,camp:o.bCamp,overlapDays:o.overlapDays,overlapStart:o.overlapStart,overlapEnd:o.overlapEnd,sameField:o.sameField,sameVessel:o.sameVessel});
+      }else{
+        if(!anchors[keyB])anchors[keyB]={act:o.b,camp:o.bCamp,overlaps:[]};
+        anchors[keyB].overlaps.push({act:o.a,camp:o.aCamp,overlapDays:o.overlapDays,overlapStart:o.overlapStart,overlapEnd:o.overlapEnd,sameField:o.sameField,sameVessel:o.sameVessel});
+      }
+    }
+  });
+
+  // Remaining overlaps not assigned to any anchor (both activities have <3 overlaps and <60d)
+  var anchorKeys={};
+  Object.keys(anchors).forEach(function(k){
+    anchorKeys[k]=true;
+    anchors[k].overlaps.forEach(function(o){
+      anchorKeys[o.act.Title+'|'+o.camp]=true;
+    });
+  });
+
+  var standaloneOverlaps=overlaps.filter(function(o){
+    var keyA=o.a.Title+'|'+o.aCamp;
+    var keyB=o.b.Title+'|'+o.bCamp;
+    // Check if this overlap is already covered by an anchor
+    var covered=false;
+    Object.keys(anchors).forEach(function(ak){
+      var anch=anchors[ak];
+      anch.overlaps.forEach(function(ao){
+        if((anch.act.Title===o.a.Title&&ao.act.Title===o.b.Title)||(anch.act.Title===o.b.Title&&ao.act.Title===o.a.Title))covered=true;
+      });
+    });
+    return!covered;
+  });
+
+  // Build HTML
+  var fieldOverlaps=overlaps.filter(function(o){return o.fieldLevel;});
 
   var html='<div class="section">';
   html+='<div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;">SIMOPS Analysis';
-  html+='<span style="font-size:9px;font-weight:500;padding:2px 8px;border-radius:3px;background:#fef3cd;color:#856404;">'+pairs.length+' overlap'+(pairs.length>1?'s':'')+'</span></div>';
+  var totalUnique=Object.keys(anchors).length+standaloneOverlaps.length;
+  html+='<span style="font-size:9px;font-weight:500;padding:2px 8px;border-radius:3px;background:#fef3cd;color:#856404;">'+overlaps.length+' overlap'+(overlaps.length>1?'s':'')+'</span></div>';
 
-  if(fieldPairs.length>0){
-    html+='<div style="padding:10px 16px 4px;"><div style="font-size:10px;font-weight:600;color:#c45222;display:flex;align-items:center;gap:4px;">';
-    html+='<span style="font-size:14px;">⚠</span> Field-level overlaps ('+fieldPairs.length+')</div>';
-    html+='<div style="font-size:8px;color:var(--text-tri);margin-top:2px;">Same field, different campaigns — potential vessel conflict</div></div>';
-    fieldPairs.forEach(function(p){html+=renderSimopCard(p);});
+  // Field-level warning if any
+  if(fieldOverlaps.length>0){
+    html+='<div style="padding:8px 16px;background:#fce4e4;border-bottom:1px solid #f5c6c6;font-size:10px;color:#c45222;display:flex;align-items:center;gap:4px;">';
+    html+='<span style="font-size:14px;">⚠</span> <b>'+fieldOverlaps.length+' field-level overlap'+(fieldOverlaps.length>1?'s':'')+'</b> — same field, different campaigns</div>';
   }
 
-  if(assetPairs.length>0){
-    html+='<div style="padding:10px 16px 4px;"><div style="font-size:10px;font-weight:600;color:#b8860b;display:flex;align-items:center;gap:4px;">';
-    html+='<span style="font-size:14px;">⚡</span> Asset-level overlaps ('+assetPairs.length+')</div>';
-    html+='<div style="font-size:8px;color:var(--text-tri);margin-top:2px;">Different fields on same asset — awareness required</div></div>';
-    assetPairs.forEach(function(p){html+=renderSimopCard(p);});
+  // Anchor groups
+  var anchorArr=Object.values(anchors).sort(function(a,b){return b.overlaps.length-a.overlaps.length;});
+  anchorArr.forEach(function(anch){
+    var col=getColor(anch.act.Grouping);
+    var dur=daysBetween(anch.act.CappedStart||anch.act.From,anch.act.CappedEnd||anch.act.To);
+    var isPersistent=dur>60;
+
+    html+='<div style="margin:8px 16px;border:1px solid var(--border);border-radius:6px;background:#fafaf7;overflow:hidden;">';
+
+    // Anchor header
+    html+='<div style="padding:10px 14px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">';
+    html+='<div><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;"><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(anch.act.Title)+'</div>';
+    html+='<div style="font-size:9px;color:var(--text-sec);margin-top:2px;">'+escHtml(anch.camp)+' — '+escHtml(anch.act.Vessel||'')+' — '+fmtDate(anch.act.CappedStart||anch.act.From)+' to '+fmtDate(anch.act.CappedEnd||anch.act.To)+' ('+dur+'d)</div></div>';
+    html+='<div style="display:flex;gap:4px;align-items:center;">';
+    if(isPersistent)html+='<span style="font-size:7px;font-weight:600;padding:2px 6px;border-radius:3px;background:#e8f0fa;color:var(--accent);text-transform:uppercase;">Persistent</span>';
+    html+='<span style="font-size:9px;font-weight:600;padding:2px 8px;border-radius:3px;background:#fef3cd;color:#856404;">'+anch.overlaps.length+' overlap'+(anch.overlaps.length>1?'s':'')+'</span>';
+    html+='</div></div>';
+
+    // Overlapping activities table
+    html+='<table style="width:100%;border-collapse:collapse;font-size:10px;">';
+    html+='<thead><tr style="background:#f0efeb;">';
+    html+='<th style="padding:5px 10px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Overlapping Activity</th>';
+    html+='<th style="padding:5px 10px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Campaign</th>';
+    html+='<th style="padding:5px 10px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Vessel</th>';
+    html+='<th style="padding:5px 10px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Overlap Period</th>';
+    html+='<th style="padding:5px 10px;text-align:center;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Days</th>';
+    html+='<th style="padding:5px 10px;text-align:center;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Flags</th>';
+    html+='</tr></thead><tbody>';
+
+    anch.overlaps.sort(function(a,b){return b.overlapDays-a.overlapDays;});
+    anch.overlaps.forEach(function(o){
+      var oCol=getColor(o.act.Grouping);
+      var rowBg=o.sameVessel?'background:#fce4e4;':o.sameField?'background:#fef9e6;':'';
+      html+='<tr style="'+rowBg+'">';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);font-weight:500;"><span class="grp-dot" style="background:'+oCol+';"></span>'+escHtml(o.act.Title)+'</td>';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);">'+escHtml(o.camp)+'</td>';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);">'+escHtml(o.act.Vessel||'')+'</td>';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);font-family:var(--mono);font-size:9px;">'+fmtDate(new Date(o.overlapStart).toISOString().slice(0,10))+' — '+fmtDate(new Date(o.overlapEnd).toISOString().slice(0,10))+'</td>';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);text-align:center;font-family:var(--mono);font-weight:600;'+(o.overlapDays>14?'color:#c45222;':'')+'">'+o.overlapDays+'d</td>';
+      html+='<td style="padding:4px 10px;border-bottom:1px solid var(--border-light);text-align:center;">';
+      if(o.sameVessel)html+='<span style="font-size:7px;font-weight:600;padding:1px 4px;border-radius:2px;background:#fce4e4;color:#c45222;">SAME VESSEL</span> ';
+      if(o.sameField)html+='<span style="font-size:7px;font-weight:600;padding:1px 4px;border-radius:2px;background:#fef3cd;color:#856404;">SAME FIELD</span>';
+      html+='</td></tr>';
+    });
+
+    html+='</tbody></table></div>';
+  });
+
+  // Standalone overlaps (not grouped under any anchor)
+  if(standaloneOverlaps.length>0){
+    html+='<div style="padding:8px 16px 4px;font-size:10px;font-weight:600;color:var(--text-sec);">Other overlaps ('+standaloneOverlaps.length+')</div>';
+    standaloneOverlaps.forEach(function(o){
+      html+=renderSimopPair(o);
+    });
   }
 
   html+='</div>';
   return html;
 }
 
-function renderSimopCard(p){
-  var col1=getColor(Object.values(p.activities1)[0]?Object.values(p.activities1)[0].Grouping:'');
-  var col2=getColor(Object.values(p.activities2)[0]?Object.values(p.activities2)[0].Grouping:'');
-  var v1=Object.keys(p.vessels1).join(', ');
-  var v2=Object.keys(p.vessels2).join(', ');
-  var uniqueFields=p.fields.filter(function(f,i,arr){return arr.indexOf(f)===i;});
+function renderSimopPair(o){
+  var col1=getColor(o.a.Grouping);
+  var col2=getColor(o.b.Grouping);
+  var rowBg=o.sameVessel?'background:#fce4e4;':o.sameField?'background:#fef9e6;':'';
 
-  // Find overall date range for the mini timeline
-  var allActs=Object.values(p.activities1).concat(Object.values(p.activities2));
-  var tMin=Infinity,tMax=-Infinity;
-  allActs.forEach(function(a){
-    var s=new Date(a.CappedStart||a.From).getTime();
-    var e=new Date(a.CappedEnd||a.To).getTime();
-    if(s<tMin)tMin=s;
-    if(e>tMax)tMax=e;
-  });
-  tMin-=86400000;tMax+=86400000;
-  var tRange=tMax-tMin;if(tRange<=0)tRange=86400000;
-  function miniPct(t){return((t-tMin)/tRange)*100;}
-
-  var html='<div style="margin:6px 16px 10px;border:1px solid var(--border);border-radius:6px;background:#fafaf7;overflow:hidden;">';
-
-  // Header row
-  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border-light);">';
-  html+='<div style="flex:1;"><div style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;"><span class="grp-dot" style="background:'+col1+';"></span>'+escHtml(p.camp1)+'</div>';
-  html+='<div style="font-size:9px;color:var(--text-sec);margin-top:1px;">'+escHtml(v1)+'</div></div>';
-  html+='<div style="text-align:center;padding:0 12px;"><div style="font-size:8px;color:var(--text-tri);text-transform:uppercase;">Overlap</div>';
-  html+='<div style="font-size:16px;font-weight:700;color:'+(p.overlapDays>14?'#c45222':p.overlapDays>7?'#b8860b':'var(--text)')+';">'+p.overlapDays+'d</div></div>';
-  html+='<div style="flex:1;text-align:right;"><div style="font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:4px;">'+escHtml(p.camp2)+'<span class="grp-dot" style="background:'+col2+';"></span></div>';
-  html+='<div style="font-size:9px;color:var(--text-sec);margin-top:1px;">'+escHtml(v2)+'</div></div>';
-  html+='</div>';
-
-  // Flags row
-  var flags=[];
-  if(p.sameVessel)flags.push('<span style="font-size:8px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fce4e4;color:#c45222;">⚠ SAME VESSEL</span>');
-  if(uniqueFields.length>0)flags.push('<span style="font-size:8px;padding:2px 6px;border-radius:3px;background:#fef3cd;color:#856404;">Fields: '+escHtml(uniqueFields.join(', '))+'</span>');
-  flags.push('<span style="font-size:8px;color:var(--text-tri);">'+fmtDate(new Date(p.overlapStart).toISOString().slice(0,10))+' — '+fmtDate(new Date(p.overlapEnd).toISOString().slice(0,10))+'</span>');
-  html+='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 14px;border-bottom:1px solid var(--border-light);">'+flags.join('')+'</div>';
-
-  // Mini overlap timeline
-  html+='<div style="padding:8px 14px;border-bottom:1px solid var(--border-light);">';
-  html+='<div style="position:relative;height:40px;background:#f0efeb;border-radius:4px;overflow:hidden;">';
-
-  // Overlap zone highlight
-  var olLeft=miniPct(p.overlapStart);
-  var olWidth=miniPct(p.overlapEnd)-olLeft;
-  html+='<div style="position:absolute;left:'+olLeft+'%;width:'+olWidth+'%;top:0;bottom:0;background:rgba(196,82,34,0.08);border-left:1px dashed #c45222;border-right:1px dashed #c45222;"></div>';
-
-  // Campaign 1 bars (top half)
-  Object.values(p.activities1).forEach(function(a){
-    var l=miniPct(new Date(a.CappedStart||a.From).getTime());
-    var w=miniPct(new Date(a.CappedEnd||a.To).getTime())-l;if(w<0.5)w=0.5;
-    html+='<div style="position:absolute;left:'+l+'%;width:'+w+'%;top:4px;height:12px;border-radius:2px;background:'+col1+';opacity:0.8;" title="'+escHtml(a.Title)+'"></div>';
-  });
-
-  // Campaign 2 bars (bottom half)
-  Object.values(p.activities2).forEach(function(a){
-    var l=miniPct(new Date(a.CappedStart||a.From).getTime());
-    var w=miniPct(new Date(a.CappedEnd||a.To).getTime())-l;if(w<0.5)w=0.5;
-    html+='<div style="position:absolute;left:'+l+'%;width:'+w+'%;top:24px;height:12px;border-radius:2px;background:'+col2+';opacity:0.8;" title="'+escHtml(a.Title)+'"></div>';
-  });
-
-  html+='</div></div>';
-
-  // Detail table - specific overlapping activity pairs
-  html+='<div style="overflow-x:auto;">';
-  html+='<table style="width:100%;border-collapse:collapse;font-size:9px;">';
-  html+='<thead><tr style="background:#f0efeb;">';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Activity</th>';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Vessel</th>';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Field</th>';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">vs Activity</th>';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Vessel</th>';
-  html+='<th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Field</th>';
-  html+='<th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:600;color:var(--text-tri);text-transform:uppercase;">Days</th>';
-  html+='</tr></thead><tbody>';
-
-  // Generate specific overlap pairs from the activities
-  var acts1=Object.values(p.activities1);
-  var acts2=Object.values(p.activities2);
-  var detailRows=[];
-  acts1.forEach(function(a){
-    var aS=new Date(a.CappedStart||a.From).getTime();
-    var aE=new Date(a.CappedEnd||a.To).getTime();
-    acts2.forEach(function(b){
-      var bS=new Date(b.CappedStart||b.From).getTime();
-      var bE=new Date(b.CappedEnd||b.To).getTime();
-      if(aS<bE&&bS<aE){
-        var oS=Math.max(aS,bS);var oE=Math.min(aE,bE);
-        var oD=Math.round((oE-oS)/86400000);
-        if(oD>0){
-          var sameField=a.Field&&b.Field&&a.Field===b.Field;
-          var sameVes=a.Vessel&&b.Vessel&&a.Vessel===b.Vessel;
-          detailRows.push({a:a,b:b,days:oD,sameField:sameField,sameVessel:sameVes});
-        }
-      }
-    });
-  });
-
-  detailRows.sort(function(a,b){return b.days-a.days;});
-
-  detailRows.forEach(function(d){
-    var rowBg=d.sameVessel?'background:#fce4e4;':d.sameField?'background:#fef9e6;':'';
-    html+='<tr style="'+rowBg+'">';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);font-weight:500;"><span class="grp-dot" style="background:'+col1+';"></span>'+escHtml(d.a.Title)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.a.Vessel)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.a.Field)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);font-weight:500;"><span class="grp-dot" style="background:'+col2+';"></span>'+escHtml(d.b.Title)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.b.Vessel)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);">'+escHtml(d.b.Field)+'</td>';
-    html+='<td style="padding:3px 8px;border-bottom:1px solid var(--border-light);text-align:center;font-family:var(--mono);font-weight:600;'+(d.days>14?'color:#c45222;':'')+'">'+d.days+'d';
-    if(d.sameVessel)html+=' <span style="font-size:7px;color:#c45222;">⚠</span>';
-    html+='</td></tr>';
-  });
-
-  html+='</tbody></table></div>';
-
+  var html='<div style="margin:4px 16px;padding:8px 12px;border:1px solid var(--border-light);border-radius:5px;font-size:10px;display:flex;align-items:center;gap:12px;'+rowBg+'">';
+  html+='<div style="flex:1;"><span class="grp-dot" style="background:'+col1+';"></span><b>'+escHtml(o.a.Title)+'</b><div style="font-size:8px;color:var(--text-tri);">'+escHtml(o.aCamp)+' — '+escHtml(o.a.Vessel||'')+'</div></div>';
+  html+='<div style="font-size:8px;color:var(--text-tri);">↔</div>';
+  html+='<div style="flex:1;"><span class="grp-dot" style="background:'+col2+';"></span><b>'+escHtml(o.b.Title)+'</b><div style="font-size:8px;color:var(--text-tri);">'+escHtml(o.bCamp)+' — '+escHtml(o.b.Vessel||'')+'</div></div>';
+  html+='<div style="text-align:center;min-width:40px;"><div style="font-size:14px;font-weight:700;'+(o.overlapDays>14?'color:#c45222;':'')+'">'+o.overlapDays+'d</div>';
+  html+='<div style="font-size:7px;color:var(--text-tri);">'+fmtDate(new Date(o.overlapStart).toISOString().slice(0,10))+' — '+fmtDate(new Date(o.overlapEnd).toISOString().slice(0,10))+'</div></div>';
+  if(o.sameVessel)html+='<span style="font-size:7px;font-weight:600;padding:2px 4px;border-radius:2px;background:#fce4e4;color:#c45222;">⚠ SAME VESSEL</span>';
+  if(o.sameField)html+='<span style="font-size:7px;font-weight:600;padding:2px 4px;border-radius:2px;background:#fef3cd;color:#856404;">SAME FIELD</span>';
   html+='</div>';
   return html;
 }
