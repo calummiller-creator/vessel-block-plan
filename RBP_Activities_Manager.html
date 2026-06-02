@@ -738,7 +738,7 @@ function toggleCompleted(){
 }
 
 function inlineEdit(td,id,field){
-  if(td.querySelector('input'))return; // Already editing
+  if(td.querySelector('input'))return;
   var a=activities.find(function(x){return x.id===id;});
   if(!a)return;
   var oldVal=a[field]||'';
@@ -747,13 +747,55 @@ function inlineEdit(td,id,field){
   input.style.cssText='width:100%;font-family:var(--font);font-size:11px;padding:2px 4px;border:1px solid var(--accent);border-radius:3px;outline:none;background:#fff;';
   input.onkeydown=function(e){
     if(e.key==='Enter'){inlineSave(td,id,field,input.value,oldVal);}
-    if(e.key==='Escape'){td.textContent=oldVal;} // Cancel
+    if(e.key==='Escape'){render();}
   };
   input.onblur=function(){inlineSave(td,id,field,input.value,oldVal);};
   td.textContent='';
   td.appendChild(input);
   input.focus();
   input.select();
+}
+
+function inlineEditDate(td,id,field){
+  if(td.querySelector('input'))return;
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  var oldVal=a[field]||'';
+  var input=document.createElement('input');
+  input.type='date';
+  input.value=oldVal;
+  input.style.cssText='font-family:var(--font);font-size:10px;padding:2px 4px;border:1px solid var(--accent);border-radius:3px;outline:none;background:#fff;width:130px;';
+  input.onchange=function(){inlineSave(td,id,field,input.value,oldVal);};
+  input.onkeydown=function(e){if(e.key==='Escape')render();};
+  input.onblur=function(){
+    setTimeout(function(){if(!td.contains(document.activeElement))inlineSave(td,id,field,input.value,oldVal);},100);
+  };
+  td.textContent='';
+  td.appendChild(input);
+  input.focus();
+}
+
+function inlineEditSelect(td,id,field,options){
+  if(td.querySelector('select'))return;
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  var oldVal=a[field]||'';
+  var sel=document.createElement('select');
+  sel.style.cssText='font-family:var(--font);font-size:10px;padding:2px 4px;border:1px solid var(--accent);border-radius:3px;outline:none;background:#fff;width:100%;';
+  options.forEach(function(opt){
+    var o=document.createElement('option');
+    o.value=opt;o.textContent=opt.replace('Planned - ','');
+    if(opt===oldVal)o.selected=true;
+    sel.appendChild(o);
+  });
+  sel.onchange=function(){inlineSave(td,id,field,sel.value,oldVal);};
+  sel.onkeydown=function(e){if(e.key==='Escape')render();};
+  sel.onblur=function(){
+    setTimeout(function(){if(!td.contains(document.activeElement))inlineSave(td,id,field,sel.value,oldVal);},100);
+  };
+  td.textContent='';
+  td.appendChild(sel);
+  sel.focus();
 }
 
 function inlineSave(td,id,field,newVal,oldVal){
@@ -832,13 +874,13 @@ function render(){
     var tr=document.createElement('tr');
     tr.className=a.level==='L1'?'l1-row':'';
     tr.innerHTML='<td><span class="level-badge '+levelCls+'">'+a.level+'</span></td>'+
-      '<td class="wrap-cell" style="font-weight:500;" ondblclick="inlineEdit(this,'+a.id+',\'title\')">'+escHtml(a.title)+'</td>'+
+      '<td class="wrap-cell" style="font-weight:500;">'+escHtml(a.title)+'</td>'+
       '<td class="nowrap-cell">'+escHtml(a.area)+'</td><td class="nowrap-cell">'+escHtml(a.asset)+'</td>'+
-      '<td class="nowrap-cell" ondblclick="inlineEdit(this,'+a.id+',\'vessel\')">'+escHtml(a.vessel)+'</td>'+
+      '<td class="nowrap-cell">'+escHtml(a.vessel)+'</td>'+
       '<td class="nowrap-cell"><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(a.grouping)+'</td>'+
-      '<td class="wrap-cell" ondblclick="inlineEdit(this,'+a.id+',\'spa\')">'+escHtml(a.spa)+'</td><td class="nowrap-cell">'+escHtml(a.org)+'</td>'+
-      '<td class="nowrap-cell"><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
-      '<td class="date-cell nowrap-cell">'+fmtDate(a.from)+'</td><td class="date-cell nowrap-cell">'+fmtDate(a.to)+'</td>'+
+      '<td class="wrap-cell">'+escHtml(a.spa)+'</td><td class="nowrap-cell">'+escHtml(a.org)+'</td>'+
+      '<td class="nowrap-cell" ondblclick="inlineEditSelect(this,'+a.id+',\'status\',STATUSES)"><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
+      '<td class="date-cell nowrap-cell" ondblclick="inlineEditDate(this,'+a.id+',\'from\')">'+fmtDate(a.from)+'</td><td class="date-cell nowrap-cell" ondblclick="inlineEditDate(this,'+a.id+',\'to\')">'+fmtDate(a.to)+'</td>'+
       '<td class="date-cell nowrap-cell">'+fmtDate(a.winFrom)+'</td><td class="date-cell nowrap-cell">'+fmtDate(a.winTo)+'</td>'+
       '<td>'+(l2Count>0?'<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>':'')+'</td>'+
       '<td><div style="display:flex;gap:3px;"><button class="btn btn-sm btn-icon" onclick="openEditModal('+a.id+')" title="Edit">&#9998;</button>'+(a.level==='Standalone'?'<button class="btn btn-sm" onclick="convertToCampaign('+a.id+')" title="Convert to campaign" style="font-size:8px;">&#8594; L1</button>':'')+'</div></td>';
