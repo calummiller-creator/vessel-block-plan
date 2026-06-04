@@ -609,7 +609,7 @@ function loadActivities(region,callback){
     // Attach L2s to their parent L1
     allItems.forEach(function(item){
       if(item.level==='L2'&&item.parentCampaign&&l1Map[item.parentCampaign]){
-        var dur=daysBetween(item.from,item.to)+1;
+        var dur=daysBetween(item.from,item.to);
         l1Map[item.parentCampaign].l2.push({
           id:item.id,title:item.title,subType:item.subType||'Work',
           area:item.area,asset:item.asset,field:item.field,
@@ -1426,7 +1426,7 @@ function calcWindow(){
   // Also update mob duration if we have from and late mob
   var winFrom=document.getElementById('fWinFrom').value;
   if(winFrom&&lateMob&&!document.getElementById('fWinMobDuration').value){
-    var d=daysBetween(winFrom,lateMob)+1;
+    var d=daysBetween(winFrom,lateMob);
     if(d>0)document.getElementById('fWinMobDuration').value=d;
   }
 }
@@ -1551,8 +1551,6 @@ function checkAccess(){
     document.querySelector('.app').innerHTML='<div style="padding:40px;text-align:center;font-family:var(--font);"><h2 style="color:var(--text);">Access Denied</h2><p style="color:var(--text-sec);margin-top:8px;">You do not have permission to use this tool.</p><p style="color:var(--text-tri);margin-top:4px;font-size:12px;">Contact the Block Plan administrator for access.</p></div>';
   }
 }
-
-checkAccess();
 
 populateFilterDropdowns();
 loadLookups(function(){
