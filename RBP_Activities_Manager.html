@@ -981,7 +981,7 @@ function updateL2Duration(idx,value){
   currentL1.l2[idx].duration=parseInt(value)||1;
   // Recalculate this row's To and chain subsequent rows
   var item=currentL1.l2[idx];
-  if(item.from)item.to=addDays(item.from,item.duration-1);
+  if(item.from)item.to=addDays(item.from,item.duration);
   recalcL2DatesFrom(idx+1);
   renderL2();
 }
@@ -991,9 +991,9 @@ function updateL2From(idx,value){
   currentL1.l2[idx].from=value;
   // Recalculate To from duration
   var item=currentL1.l2[idx];
-  if(value&&item.duration)item.to=addDays(value,item.duration-1);
+  if(value&&item.duration)item.to=addDays(value,item.duration);
   // Recalculate duration if To already set
-  if(value&&item.to)item.duration=daysBetween(value,item.to)+1;
+  if(value&&item.to)item.duration=daysBetween(value,item.to);
   // Chain subsequent rows
   recalcL2DatesFrom(idx+1);
   updateL1Dates();
@@ -1005,7 +1005,7 @@ function updateL2To(idx,value){
   currentL1.l2[idx].to=value;
   // Update duration from From/To
   var item=currentL1.l2[idx];
-  if(item.from&&value)item.duration=daysBetween(item.from,value)+1;
+  if(item.from&&value)item.duration=daysBetween(item.from,value);
   // Chain subsequent rows
   recalcL2DatesFrom(idx+1);
   updateL1Dates();
@@ -1020,7 +1020,7 @@ function recalcL2DatesFrom(startIdx){
       items[i].from=items[i-1].to;
     }
     if(items[i].from&&items[i].duration){
-      items[i].to=addDays(items[i].from,items[i].duration-1);
+      items[i].to=addDays(items[i].from,items[i].duration);
     }
   }
 }
@@ -1043,7 +1043,7 @@ function addL2Row(){
   if(!currentL1.l2)currentL1.l2=[];
   var lastTo=currentL1.l2.length>0?currentL1.l2[currentL1.l2.length-1].to:null;
   var newFrom=lastTo||(currentL1.from||'');
-  var newTo=newFrom?addDays(newFrom,0):'';
+  var newTo=newFrom?addDays(newFrom,1):'';
   currentL1.l2.push({id:0,title:'',subType:'Work',area:currentL1.area,asset:currentL1.asset,field:'',vessel:currentL1.vessel,mmsi:currentL1.mmsi||'',duration:1,from:newFrom,to:newTo,spa:currentL1.spa,org:currentL1.org,grouping:currentL1.grouping,status:currentL1.status,pe:currentL1.pe,parentCampaign:currentL1.title,level:'L2'});
   renderL2();
 }
@@ -1059,9 +1059,9 @@ function togglePaste(){document.getElementById('pasteArea').classList.toggle('sh
 
 function copyL2ToClipboard(){
   if(!currentL1||!currentL1.l2||currentL1.l2.length===0){showToast('No L2 activities to copy');return;}
-  var header='Title\tSubType\tArea\tAsset\tField\tDuration\tVessel\tMMSI\tSPA\tGrouping\tOrg\tStatus\tP/E';
+  var header='Title\tSubType\tArea\tAsset\tField\tDuration\tFrom\tTo\tVessel\tMMSI\tSPA\tGrouping\tOrg\tStatus\tP/E';
   var rows=currentL1.l2.map(function(l){
-    return [l.title||'',l.subType||'',l.area||'',l.asset||'',l.field||'',l.duration||'',l.vessel||'',l.mmsi||'',l.spa||'',l.grouping||'',l.org||'',l.status||'',l.pe||''].join('\t');
+    return [l.title||'',l.subType||'',l.area||'',l.asset||'',l.field||'',l.duration||'',l.from||'',l.to||'',l.vessel||'',l.mmsi||'',l.spa||'',l.grouping||'',l.org||'',l.status||'',l.pe||''].join('\t');
   });
   navigator.clipboard.writeText(header+'\n'+rows.join('\n')).then(function(){
     showToast(rows.length+' rows copied - paste into Excel to edit, then paste back');
@@ -1092,7 +1092,7 @@ function processPaste(){
     // Title|SubType|Area|Asset|Field|Duration|Vessel|MMSI|SPA|Grouping|Org|Status|P/E
     var dur=parseInt(c[5])||1;
     var from=lastTo||(currentL1.from||'');
-    var to=from?addDays(from,dur-1):'';
+    var to=from?addDays(from,dur):'';
     lastTo=to;
     var v=function(idx,def){var val=(c[idx]||'').trim();return val||def||'';};
     currentL1.l2.push({
@@ -1181,7 +1181,7 @@ function convertToCampaign(id){
     a.level='L1';
     a.l2=[{
       id:0,title:a.title,subType:'Work',area:a.area,asset:a.asset,field:a.field,
-      vessel:a.vessel,duration:daysBetween(a.from,a.to)+1||1,from:a.from,to:a.to,
+      vessel:a.vessel,duration:daysBetween(a.from,a.to)||1,from:a.from,to:a.to,
       spa:a.spa,org:a.org,grouping:a.grouping,status:a.status,pe:a.pe,
       parentCampaign:a.title,level:'L2'
     }];
@@ -1239,7 +1239,7 @@ function openEditModal(id){
   document.getElementById('fOrg').value=a.org;
   document.getElementById('fFrom').value=a.from;
   document.getElementById('fTo').value=a.to;
-  if(a.from&&a.to){var d=daysBetween(a.from,a.to)+1;document.getElementById('fDuration').value=d>0?d:'';}else{document.getElementById('fDuration').value='';}
+  if(a.from&&a.to){var d=daysBetween(a.from,a.to);document.getElementById('fDuration').value=d>0?d:'';}else{document.getElementById('fDuration').value='';}
   document.getElementById('fWinFrom').value=a.winFrom||'';
   document.getElementById('fWinTo').value=a.winTo||'';
   // Clear calculation fields on edit (user can recalculate)
@@ -1381,14 +1381,14 @@ function calcModalDates(changed){
   var dur=parseInt(document.getElementById('fDuration').value)||0;
   var to=document.getElementById('fTo').value;
   if(changed==='from'&&from&&dur>0){
-    document.getElementById('fTo').value=addDays(from,dur-1);
+    document.getElementById('fTo').value=addDays(from,dur);
   }else if(changed==='dur'&&from&&dur>0){
-    document.getElementById('fTo').value=addDays(from,dur-1);
+    document.getElementById('fTo').value=addDays(from,dur);
   }else if(changed==='to'&&from&&to){
-    var d=daysBetween(from,to)+1;
+    var d=daysBetween(from,to);
     if(d>0)document.getElementById('fDuration').value=d;
   }else if(changed==='from'&&from&&to){
-    var d=daysBetween(from,to)+1;
+    var d=daysBetween(from,to);
     if(d>0)document.getElementById('fDuration').value=d;
   }
 }
@@ -1553,6 +1553,11 @@ function checkAccess(){
 }
 
 checkAccess();
+
+populateFilterDropdowns();
+loadLookups(function(){
+  loadActivities(document.getElementById('regionSelect').value);
+});
 
 function loadLookups(callback){
   apiCall({action:'loadLookups'}).then(function(data){
