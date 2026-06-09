@@ -88,6 +88,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .date-cell{font-family:var(--mono);font-size:9px;color:var(--text-sec);}
 .expand-btn{font-size:9px;cursor:pointer;color:var(--accent);background:none;border:none;font-family:var(--font);font-weight:600;padding:2px 6px;border-radius:3px;}
 .expand-btn:hover{background:var(--accent-light);}
+.warn-badge{display:inline-flex;align-items:center;gap:3px;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;background:var(--red-light);color:var(--red);font-family:var(--mono);cursor:help;letter-spacing:0.2px;}
+.tbl tr.l1-empty{background:#fdf4f4;}
+.tbl tr.l1-empty:hover{background:#fbeded;}
+.btn-breakout{font-size:8px;color:var(--orange);border-color:#e6c4a8;}
+.btn-breakout:hover{background:#fbeee2;border-color:var(--orange);}
 
 /* L2 Full Page */
 .l2-page{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:50;display:none;flex-direction:column;}
@@ -174,7 +179,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       </select>
     </div>
     <div class="header-actions">
-      <a href="#" id="pbiLink" class="btn" target="_blank" style="text-decoration:none;">📊 Block Plan</a>
+      <a href="https://app.powerbi.com/groups/3db3d3bb-7e61-4fed-a78e-f927b7d4143c/reports/eac48140-a271-4a84-9798-8eacea61bd49/2fbd95076c33b3d071c2?experience=power-bi" id="pbiLink" class="btn" target="_blank" rel="noopener" style="text-decoration:none;">📊 Block Plan</a>
       <button class="btn" onclick="copyMainToClipboard()">Copy to Excel</button>
       <button class="btn btn-primary" onclick="openAddModal('Standalone')">+ Standalone</button>
       <button class="btn btn-primary" onclick="openAddModal('L1')">+ Campaign</button>
@@ -283,7 +288,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 </div>
 
 <!-- Modal -->
-<div class="modal-overlay" id="modalOverlay">>
+<div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <h2 id="modalTitle">Add Activity</h2>
     <div id="l1Warning" style="display:none;background:#fce4e4;border:1px solid #f5c6c6;border-radius:5px;padding:8px 12px;margin-bottom:10px;font-size:10px;color:#c45222;line-height:1.5;"><b>Campaign mode:</b> Only use + Campaign for activities with multiple L2 sub-activities. For single line entries, use + Standalone instead. Area, Asset and Field will be set at L2 level.</div>
@@ -359,7 +364,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="help-item"><b>Show completed</b> By default, Completed/Cancelled activities are hidden. Toggle this to show them.</div>
       <div class="help-item"><b>Copy to Excel</b> Copies the currently visible table to clipboard for pasting into Excel.</div>
       <div class="help-item"><b>Edit button</b> Opens the edit form for a Standalone or L1 row.</div>
-      <div class="help-item"><b>Convert to L1</b> On standalone rows, click the arrow button to convert it into a campaign with L2 sub-activities.</div>
+      <div class="help-item"><b>&#8594; L1</b> On standalone rows, converts it into a campaign with L2 sub-activities.</div>
+      <div class="help-item"><b>&#8594; SA</b> On campaign (L1) rows, converts it back to a Standalone activity. <b style="color:var(--red);">This deletes all of its L2 sub-activities</b> and keeps the campaign's current dates.</div>
+      <div class="help-item"><b>&#9888; No L2 flag</b> A red flag on an L1 row means the campaign has no L2 activities, so it will not appear in the Block Plan or map. Either add L2 lines, or convert it to Standalone (&#8594; SA).</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">L2 sub-activities</div>
@@ -368,6 +375,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="help-item"><b>Override dates</b> You can manually change any From or To date. Subsequent rows will re-chain from that point.</div>
       <div class="help-item"><b>Defaults from L1</b> New L2 rows inherit Vessel, SPA, Grouping, Org, Status, and P/E from the L1 campaign header. Override any of these per row if needed — differences show in blue.</div>
       <div class="help-item"><b>Blank Area/Asset/Field</b> Port calls and transits can leave these blank.</div>
+      <div class="help-item"><b>Break out (&#8599;)</b> Removes a sub-activity from the campaign and turns it into its own Standalone activity, keeping its dates, vessel and location. Save other changes first, as this reloads the campaign.</div>
       <div class="help-item"><b>SPA search</b> Type 3+ characters to search the global address book. Select a result to set the SPA.</div>
     </div>
     <div class="help-section">
@@ -871,8 +879,25 @@ function render(){
     var sc=getStatusClass(a.status);
     var levelCls=a.level==='L1'?'level-l1':'level-standalone';
     var l2Count=a.l2?a.l2.length:0;
+    var isEmptyL1=a.level==='L1'&&l2Count===0;
     var tr=document.createElement('tr');
-    tr.className=a.level==='L1'?'l1-row':'';
+    tr.className=a.level==='L1'?(isEmptyL1?'l1-row l1-empty':'l1-row'):'';
+    // L2 / status cell content
+    var l2Cell;
+    if(isEmptyL1){
+      l2Cell='<span class="warn-badge" title="This campaign has no L2 sub-activities, so it will NOT appear in the Block Plan or map. Either add L2 activities, or convert it to a Standalone activity.">&#9888; No L2</span>';
+    }else if(l2Count>0){
+      l2Cell='<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>';
+    }else{
+      l2Cell='';
+    }
+    // Action buttons
+    var actionBtns='<button class="btn btn-sm btn-icon" onclick="openEditModal('+a.id+')" title="Edit">&#9998;</button>';
+    if(a.level==='Standalone'){
+      actionBtns+='<button class="btn btn-sm" onclick="convertToCampaign('+a.id+')" title="Convert to campaign" style="font-size:8px;">&#8594; L1</button>';
+    }else if(a.level==='L1'){
+      actionBtns+='<button class="btn btn-sm btn-breakout" onclick="convertL1ToStandalone('+a.id+')" title="Convert to a standalone activity (deletes all L2 sub-activities)">&#8594; SA</button>';
+    }
     tr.innerHTML='<td><span class="level-badge '+levelCls+'">'+a.level+'</span></td>'+
       '<td class="wrap-cell" style="font-weight:500;">'+escHtml(a.title)+'</td>'+
       '<td class="nowrap-cell">'+escHtml(a.area)+'</td><td class="nowrap-cell">'+escHtml(a.asset)+'</td>'+
@@ -882,8 +907,8 @@ function render(){
       '<td class="nowrap-cell" ondblclick="inlineEditSelect(this,'+a.id+',\'status\',STATUSES)"><span class="status-pill '+sc+'">'+escHtml(a.status?(typeof a.status==='string'?a.status:String(a.status)).replace('Planned - ',''):'')+'</span></td>'+
       '<td class="date-cell nowrap-cell" ondblclick="inlineEditDate(this,'+a.id+',\'from\')">'+fmtDate(a.from)+'</td><td class="date-cell nowrap-cell" ondblclick="inlineEditDate(this,'+a.id+',\'to\')">'+fmtDate(a.to)+'</td>'+
       '<td class="date-cell nowrap-cell">'+fmtDate(a.winFrom)+'</td><td class="date-cell nowrap-cell">'+fmtDate(a.winTo)+'</td>'+
-      '<td>'+(l2Count>0?'<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>':'')+'</td>'+
-      '<td><div style="display:flex;gap:3px;"><button class="btn btn-sm btn-icon" onclick="openEditModal('+a.id+')" title="Edit">&#9998;</button>'+(a.level==='Standalone'?'<button class="btn btn-sm" onclick="convertToCampaign('+a.id+')" title="Convert to campaign" style="font-size:8px;">&#8594; L1</button>':'')+'</div></td>';
+      '<td>'+l2Cell+'</td>'+
+      '<td><div style="display:flex;gap:3px;">'+actionBtns+'</div></td>';
     body.appendChild(tr);
   });
   var all=activities.filter(function(a){return a.level!=='L2';}).length;
@@ -969,7 +994,7 @@ function renderL2(){
       '<td><select class="l2-select" onchange="updateL2('+i+',\'org\',this.value)" style="'+(orgDiff?'color:var(--accent);font-weight:600;':'')+'">'+mkOptions(ORG_LIST,l.org||currentL1.org,'')+'</select></td>'+
       '<td><select class="l2-select" onchange="updateL2('+i+',\'status\',this.value)">'+mkShortOptions(STATUSES,l.status||currentL1.status)+'</select></td>'+
       '<td><select class="l2-select" onchange="updateL2('+i+',\'pe\',this.value)">'+mkShortOptions(PE_OPTS,l.pe||currentL1.pe)+'</select></td>'+
-      '<td><button class="btn btn-sm btn-icon btn-danger" onclick="deleteL2('+i+')">\u00D7</button></td>';
+      '<td><div style="display:flex;gap:3px;"><button class="btn btn-sm btn-breakout" onclick="breakoutL2('+i+')" title="Break this activity out of the campaign as a Standalone">&#8599;</button><button class="btn btn-sm btn-icon btn-danger" onclick="deleteL2('+i+')">\u00D7</button></div></td>';
     body.appendChild(tr);
   });
 }
@@ -1053,6 +1078,32 @@ function deleteL2(idx){
   currentL1.l2.splice(idx,1);
   if(currentL1.l2.length>0)recalcL2Dates(0);
   renderL2();
+}
+
+function breakoutL2(idx){
+  if(!currentL1||!currentL1.l2[idx])return;
+  var l=currentL1.l2[idx];
+  if(!l.id||l.id===0){
+    alert('This activity has not been saved to SharePoint yet.\n\nSave the campaign first (Save changes), then break it out.');
+    return;
+  }
+  if(!confirm('Break "'+(l.title||'this activity')+'" out of "'+currentL1.title+'" and make it a Standalone activity?\n\n\u26A0 Save any other pending changes first \u2014 this action reloads the campaign and unsaved edits to other rows will be lost.\n\nThe activity keeps its own dates, vessel, area/asset/field and SPA.'))return;
+
+  showToast('Breaking out activity...');
+  apiCall({action:'breakoutL2',id:l.id}).then(function(){
+    var l1Id=currentL1.id;
+    var l1Title=currentL1.title;
+    showToast('"'+(l.title||'Activity')+'" is now Standalone');
+    closeL2Page();
+    loadActivities(document.getElementById('regionSelect').value,function(){
+      // Reopen the campaign editor if it still has L2s, so the user can carry on
+      var l1=activities.find(function(x){return x.id===l1Id&&x.level==='L1';});
+      if(l1&&l1.l2&&l1.l2.length>0)openL2Page(l1Id);
+    });
+  }).catch(function(err){
+    console.error('Breakout L2 error:',err);
+    showToast('Error: '+err.message);
+  });
 }
 
 function togglePaste(){document.getElementById('pasteArea').classList.toggle('show');}
@@ -1190,6 +1241,31 @@ function convertToCampaign(id){
     showToast('Converted - add L2 activities and save');
   }).catch(function(err){
     console.error('Convert error:',err);
+    showToast('Error: '+err.message);
+  });
+}
+
+function convertL1ToStandalone(id){
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a)return;
+  var l2Count=a.l2?a.l2.length:0;
+  var msg='Convert campaign "'+a.title+'" to a Standalone activity?\n\n';
+  if(l2Count>0){
+    msg+='\u26A0 WARNING: This will permanently DELETE all '+l2Count+' L2 sub-activit'+(l2Count===1?'y':'ies')+' within this campaign. This cannot be undone.\n\n';
+  }
+  msg+='The campaign header will become a single Standalone line, keeping its current From/To dates. You may need to set the Area / Asset / Field afterwards (these are normally held at L2 level).';
+  if(!confirm(msg))return;
+
+  showToast('Converting to standalone...');
+  apiCall({action:'convertToStandalone',l1Id:a.id,parentCampaign:a.title}).then(function(){
+    showToast('Converted to standalone' + (l2Count>0?' - '+l2Count+' L2 line'+(l2Count===1?'':'s')+' deleted':''));
+    // Reload then open the edit form so the user can set Area/Asset/Field
+    loadActivities(document.getElementById('regionSelect').value,function(){
+      var sa=activities.find(function(x){return x.id===id&&x.level==='Standalone';});
+      if(sa)openEditModal(id);
+    });
+  }).catch(function(err){
+    console.error('Convert to standalone error:',err);
     showToast('Error: '+err.message);
   });
 }
