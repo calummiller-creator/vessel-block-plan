@@ -93,6 +93,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .tbl tr.l1-empty:hover{background:#fbeded;}
 .btn-breakout{font-size:8px;color:var(--orange);border-color:#e6c4a8;}
 .btn-breakout:hover{background:#fbeee2;border-color:var(--orange);}
+.l2cell-stack{display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
+.warn-badge.amber{background:#fdf3e7;color:#b5651d;}
+.expand-btn.add-l2{background:var(--accent-light);color:var(--accent);font-weight:700;}
 
 /* L2 Full Page */
 .l2-page{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:50;display:none;flex-direction:column;}
@@ -173,8 +176,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
     <div class="header-left">
       <h1>RBP Activities</h1>
       <select class="region-select" id="regionSelect" onchange="changeRegion(this.value)">
+        <option value="" selected>Select region…</option>
         <option value="North Sea">North Sea</option>
-        <option value="M&S" selected>M&amp;S</option>
+        <option value="M&S">M&amp;S</option>
         <option value="Egypt">Egypt</option>
       </select>
     </div>
@@ -366,7 +370,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="help-item"><b>Edit button</b> Opens the edit form for a Standalone or L1 row.</div>
       <div class="help-item"><b>&#8594; L1</b> On standalone rows, converts it into a campaign with L2 sub-activities.</div>
       <div class="help-item"><b>&#8594; SA</b> On campaign (L1) rows, converts it back to a Standalone activity. <b style="color:var(--red);">This deletes all of its L2 sub-activities</b> and keeps the campaign's current dates.</div>
-      <div class="help-item"><b>&#9888; No L2 flag</b> A red flag on an L1 row means the campaign has no L2 activities, so it will not appear in the Block Plan or map. Either add L2 lines, or convert it to Standalone (&#8594; SA).</div>
+      <div class="help-item"><b>&#9888; No L2 flag</b> A red flag on an L1 row means the campaign has no L2 activities, so it will not appear in the Block Plan or map. Use <b>+ Add L2</b> next to the flag to add activities, or convert it to Standalone (&#8594; SA).</div>
+      <div class="help-item"><b>&#9888; Standalone? flag</b> An amber flag appears when a campaign has only one L2 activity. A single-activity campaign is usually better recorded as a Standalone &#8212; click the flag to convert it (the activity&#8217;s dates, vessel and location are kept for review).</div>
+      <div class="help-item"><b>Region</b> Choose a region (top left) to load its activities. Nothing loads until a region is selected.</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">L2 sub-activities</div>
@@ -885,7 +891,15 @@ function render(){
     // L2 / status cell content
     var l2Cell;
     if(isEmptyL1){
-      l2Cell='<span class="warn-badge" title="This campaign has no L2 sub-activities, so it will NOT appear in the Block Plan or map. Either add L2 activities, or convert it to a Standalone activity.">&#9888; No L2</span>';
+      l2Cell='<div class="l2cell-stack">'+
+        '<span class="warn-badge" title="This campaign has no L2 sub-activities, so it will NOT appear in the Block Plan or map. Add L2 activities, or convert it to a Standalone.">&#9888; No L2</span>'+
+        '<button class="expand-btn add-l2" onclick="openL2Page('+a.id+')">+ Add L2</button>'+
+        '</div>';
+    }else if(a.level==='L1'&&l2Count===1){
+      l2Cell='<div class="l2cell-stack">'+
+        '<button class="expand-btn" onclick="openL2Page('+a.id+')">1 &rarr;</button>'+
+        '<span class="warn-badge amber" onclick="convertSingleL2ToStandalone('+a.id+')" style="cursor:pointer;" title="This campaign has only one activity. A campaign with a single activity is usually better recorded as a Standalone. Click to convert \u2014 the activity\u2019s details are kept.">&#9888; Standalone?</span>'+
+        '</div>';
     }else if(l2Count>0){
       l2Cell='<button class="expand-btn" onclick="openL2Page('+a.id+')">'+l2Count+' &rarr;</button>';
     }else{
@@ -934,6 +948,9 @@ function openL2Page(id){
   document.getElementById('l2Sub').textContent=(currentL1.vessel||'No vessel')+' \u2014 '+currentL1.grouping;
   document.getElementById('l2Meta').innerHTML='<span>'+escHtml(currentL1.spa)+'</span><span>'+escHtml(currentL1.org)+'</span><span>'+fmtDateFull(currentL1.from)+' \u2192 '+fmtDateFull(currentL1.to)+'</span>';
   renderL2();
+  if(currentL1.level==='L1'&&(!currentL1.l2||currentL1.l2.length===0)){
+    addL2Row();
+  }
   document.getElementById('l2Page').classList.add('open');
 }
 
@@ -1270,16 +1287,43 @@ function convertL1ToStandalone(id){
   });
 }
 
-// Modal
-var editingId=null,addingLevel='Standalone';
+function convertSingleL2ToStandalone(id){
+  var a=activities.find(function(x){return x.id===id;});
+  if(!a||!a.l2||a.l2.length!==1)return;
+  var l2=a.l2[0];
+  // Capture the single activity's details so they're kept on the resulting standalone
+  var keep={region:a.region,area:l2.area||a.area||'',asset:l2.asset||a.asset||'',field:l2.field||'',from:l2.from||a.from,to:l2.to||a.to};
+  if(!confirm('"'+a.title+'" has only one activity.\n\nCampaigns with a single activity are usually better recorded as a Standalone. Convert it now?\n\nThe activity\u2019s dates, vessel, location and SPA are kept \u2014 only the campaign grouping is removed. You\u2019ll get a chance to review before it saves.'))return;
+
+  showToast('Converting to standalone...');
+  apiCall({action:'convertToStandalone',l1Id:a.id,parentCampaign:a.title}).then(function(){
+    loadActivities(document.getElementById('regionSelect').value,function(){
+      var sa=activities.find(function(x){return x.id===id&&x.level==='Standalone';});
+      if(sa){
+        openEditModal(id);
+        // Pre-fill location/dates captured from the (now-removed) L2 for review
+        setModalCascade(keep.region,keep.area,keep.asset,keep.field);
+        if(keep.from)document.getElementById('fFrom').value=keep.from;
+        if(keep.to)document.getElementById('fTo').value=keep.to;
+        showToast('Review the details and Save to confirm');
+      }else{
+        showToast('Converted to standalone');
+      }
+    });
+  }).catch(function(err){
+    console.error('Collapse to standalone error:',err);
+    showToast('Error: '+err.message);
+  });
+}
 
 function openAddModal(level){
+  var rgn=document.getElementById('regionSelect').value;
+  if(!rgn){alert('Please select a region first (top left) before adding an activity.');return;}
   editingId=null;addingLevel=level;
   document.getElementById('modalTitle').textContent='Add '+(level==='L1'?'Campaign':'Standalone Activity');
   ['fTitle','fVessel','fContractor','fFrom','fTo','fDuration','fWinFrom','fWinTo','fWinMobDuration','fWinContingency','fWinLateMob','fMMSI','fBPE'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   // Reset window calculation fields
   var wCalc=document.getElementById('winCalcRow');if(wCalc)wCalc.style.display='';
-  var rgn=document.getElementById('regionSelect').value;
   setModalCascade(rgn,'','','');
   document.getElementById('fSPA').value='';
   document.getElementById('fOrg').value='';
@@ -1299,11 +1343,13 @@ function openEditModal(id){
   if(!a)return;
   editingId=id;addingLevel=a.level;
   document.getElementById('modalTitle').textContent='Edit: '+a.title;
-  // Hide L1 warning and enable all fields on edit
-  document.getElementById('l1Warning').style.display='none';
+  // For L1 campaigns, Area/Asset/Field are derived from the L2s - keep them greyed out.
+  // For Standalone activities, they are editable here.
+  var isL1=a.level==='L1';
+  document.getElementById('l1Warning').style.display=isL1?'block':'none';
   ['fArea','fAsset','fField'].forEach(function(fid){
     var el=document.getElementById(fid);
-    el.disabled=false;el.style.opacity='1';
+    el.disabled=isL1;el.style.opacity=isL1?'0.4':'1';
   });
   document.getElementById('fTitle').value=a.title;
   setModalCascade(a.region,a.area,a.asset,a.field);
@@ -1415,7 +1461,15 @@ function saveModal(){
 
 function changeRegion(region){
   document.getElementById('fRegion').value=region;
+  if(!region){showRegionPrompt();return;}
   loadActivities(region);
+}
+
+function showRegionPrompt(){
+  activities=[];
+  var body=document.getElementById('mainBody');
+  if(body)body.innerHTML='<tr><td colspan="15" style="text-align:center;padding:48px;font-family:var(--font);"><div style="font-size:13px;color:var(--text-sec);margin-bottom:4px;font-weight:500;">Select a region to load activities</div><div style="font-size:11px;color:var(--text-tri);">Use the region selector at the top left to choose North Sea, M&amp;S or Egypt.</div></td></tr>';
+  ['countAll','countCampaigns','countStandalone'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent='0';});
 }
 
 function onRegionChange(){
@@ -1621,7 +1675,7 @@ function checkAccess(){
     accessGranted=true;
     populateFilterDropdowns();
     loadLookups(function(){
-      loadActivities(document.getElementById('regionSelect').value);
+      showRegionPrompt();
     });
   }else{
     document.querySelector('.app').innerHTML='<div style="padding:40px;text-align:center;font-family:var(--font);"><h2 style="color:var(--text);">Access Denied</h2><p style="color:var(--text-sec);margin-top:8px;">You do not have permission to use this tool.</p><p style="color:var(--text-tri);margin-top:4px;font-size:12px;">Contact the Block Plan administrator for access.</p></div>';
@@ -1630,7 +1684,7 @@ function checkAccess(){
 
 populateFilterDropdowns();
 loadLookups(function(){
-  loadActivities(document.getElementById('regionSelect').value);
+  showRegionPrompt();
 });
 
 function loadLookups(callback){
