@@ -42,6 +42,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .mf-btn{font-family:var(--font);font-size:10px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text-sec);cursor:pointer;white-space:nowrap;}
 .mf-btn:hover{border-color:#bbb;}
 .mf-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-light);}
+.btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-light);}
+#warningsToggle.active{border-color:var(--red);color:var(--red);background:var(--red-light);}
 .mf-count{font-family:var(--mono);font-size:8px;background:var(--accent);color:#fff;padding:0 4px;border-radius:8px;margin-left:2px;display:none;}
 .mf-count.show{display:inline;}
 .mf-drop{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,0.1);z-index:20;min-width:160px;max-height:240px;overflow-y:auto;padding:4px;}
@@ -201,6 +203,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
     <div class="multi-filter" id="mfOrg"><button class="mf-btn" onclick="toggleMF('mfOrg')">Org <span class="mf-count"></span></button><div class="mf-drop"></div></div>
     <button class="filter-clear" onclick="clearFilters()">Clear all</button>
     <button class="btn btn-sm" id="completedToggle" onclick="toggleCompleted()" style="margin-left:4px;">Show completed</button>
+    <button class="btn btn-sm" id="warningsToggle" onclick="toggleWarnings()">&#9888; Warnings only</button>
   </div>
   <div class="tabs">
     <button class="tab active" id="tabAll" onclick="setTab('all')">All<span class="count" id="countAll"></span></button>
@@ -373,6 +376,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="help-item"><b>&#9888; No L2 flag</b> A red flag on an L1 row means the campaign has no L2 activities, so it will not appear in the Block Plan or map. Use <b>+ Add L2</b> next to the flag to add activities, or convert it to Standalone (&#8594; SA).</div>
       <div class="help-item"><b>&#9888; Standalone? flag</b> An amber flag appears when a campaign has only one L2 activity. A single-activity campaign is usually better recorded as a Standalone &#8212; click the flag to convert it (the activity&#8217;s dates, vessel and location are kept for review).</div>
       <div class="help-item"><b>&#9888; next to a title</b> A warning flag means the activity\u2019s dates and status don\u2019t line up \u2014 e.g. the To date has passed but it\u2019s still Planned/Ongoing, the dates show it should be Ongoing, or it hasn\u2019t been updated in over a month. Hover to see the issue; click the flag to open the activity and fix it.</div>
+      <div class="help-item"><b>&#9888; Warnings only</b> Toggle in the filter bar to show only rows that have a warning \u2014 empty or single-activity campaigns, or date/status mismatches. Handy for a quick housekeeping pass.</div>
       <div class="help-item"><b>Region</b> Choose a region (top left) to load its activities. Nothing loads until a region is selected.</div>
     </div>
     <div class="help-section">
@@ -471,6 +475,7 @@ function mkShortOptions(list,current){
 
 var currentTab='all';
 var hideCompleted=true; // Default: hide Completed, Cancelled, Deleted
+var warningsOnly=false; // When true, show only rows with a warning flag
 var currentL1=null;
 
 // ── API CONFIGURATION ──
@@ -720,6 +725,11 @@ function populateFilterDropdowns(){
 function clearFilters(){
   document.getElementById('filterSearch').value='';
   Object.keys(mfState).forEach(function(id){mfState[id]=[];updateMFBtn(id);});
+  if(warningsOnly){
+    warningsOnly=false;
+    var wb=document.getElementById('warningsToggle');
+    if(wb){wb.classList.remove('active');wb.textContent='\u26A0 Warnings only';}
+  }
   populateFilterDropdowns();
   render();
 }
@@ -750,6 +760,14 @@ function toggleCompleted(){
   hideCompleted=!hideCompleted;
   document.getElementById('completedToggle').classList.toggle('active',!hideCompleted);
   document.getElementById('completedToggle').textContent=hideCompleted?'Show completed':'Hide completed';
+  render();
+}
+
+function toggleWarnings(){
+  warningsOnly=!warningsOnly;
+  var b=document.getElementById('warningsToggle');
+  b.classList.toggle('active',warningsOnly);
+  b.textContent=warningsOnly?'\u26A0 Showing warnings':'\u26A0 Warnings only';
   render();
 }
 
@@ -867,6 +885,8 @@ function getFiltered(){
       items=items.filter(function(a){return sel.indexOf(a[field])>=0;});
     }
   });
+  // Warnings-only filter
+  if(warningsOnly)items=items.filter(hasWarning);
   // Sort
   items.sort(function(a,b){
     var va=a[sortField]||'',vb=b[sortField]||'';
@@ -907,6 +927,14 @@ function dateStatusIssues(a){
     }
   }
   return issues;
+}
+
+function hasWarning(a){
+  if(a.level==='L1'){
+    var n=a.l2?a.l2.length:0;
+    if(n===0||n===1)return true; // No L2, or single-L2 "Standalone?" flag
+  }
+  return dateStatusIssues(a).length>0;
 }
 
 function render(){
