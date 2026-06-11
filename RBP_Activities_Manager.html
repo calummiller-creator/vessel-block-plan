@@ -372,6 +372,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <div class="help-item"><b>&#8594; SA</b> On campaign (L1) rows, converts it back to a Standalone activity. <b style="color:var(--red);">This deletes all of its L2 sub-activities</b> and keeps the campaign's current dates.</div>
       <div class="help-item"><b>&#9888; No L2 flag</b> A red flag on an L1 row means the campaign has no L2 activities, so it will not appear in the Block Plan or map. Use <b>+ Add L2</b> next to the flag to add activities, or convert it to Standalone (&#8594; SA).</div>
       <div class="help-item"><b>&#9888; Standalone? flag</b> An amber flag appears when a campaign has only one L2 activity. A single-activity campaign is usually better recorded as a Standalone &#8212; click the flag to convert it (the activity&#8217;s dates, vessel and location are kept for review).</div>
+      <div class="help-item"><b>&#9888; next to a title</b> A warning flag means the activity\u2019s dates and status don\u2019t line up \u2014 e.g. the To date has passed but it\u2019s still Planned/Ongoing, the dates show it should be Ongoing, or it hasn\u2019t been updated in over a month. Hover to see the issue; click the flag to open the activity and fix it.</div>
       <div class="help-item"><b>Region</b> Choose a region (top left) to load its activities. Nothing loads until a region is selected.</div>
     </div>
     <div class="help-section">
@@ -577,6 +578,7 @@ function mapSPItem(sp){
     parentCampaign:toStr(sp.ParentCampaign||sp.Parent_x0020_Campaign),
     lat:sp.Lat||null,
     lng:sp.Long||null,
+    modified:sp.Modified||sp.Modified_x0020_Date||'',
     l2:[]
   };
 }
@@ -876,6 +878,37 @@ function getFiltered(){
   return items;
 }
 
+function dateStatusIssues(a){
+  var issues=[];
+  var st=(a.status||'').trim();
+  var isPlanned=st.indexOf('Planned')===0;
+  var isOngoing=st==='Ongoing';
+  var isTerminal=st==='Completed'||st==='Cancelled'||st==='Deleted-input in error';
+  var today=new Date();today.setHours(0,0,0,0);
+  function d(s){return s?new Date(s.substring(0,10)+'T00:00:00'):null;}
+  var from=d(a.from),to=d(a.to);
+  // 1) To date has passed but still Planned or Ongoing
+  if(to&&to<today&&(isPlanned||isOngoing)){
+    issues.push('The To date ('+fmtDate(a.to)+') has passed but the status is \''+st+'\'. Amend the dates or update the status (e.g. Completed).');
+  }
+  // 2) Started but not finished, and not marked Ongoing
+  if(from&&to&&from<=today&&to>=today&&!isOngoing&&!isTerminal){
+    issues.push('These dates indicate the activity is currently active (started '+fmtDate(a.from)+', ends '+fmtDate(a.to)+') but the status is \''+st+'\'. Set the status to Ongoing if it has started.');
+  }
+  // 3) Not updated in over a month (only if Modified is available and not a finished item)
+  if(a.modified&&!isTerminal){
+    var m=new Date(a.modified);
+    if(!isNaN(m.getTime())){
+      var mDay=new Date(m.getFullYear(),m.getMonth(),m.getDate());
+      var days=Math.floor((today-mDay)/86400000);
+      if(days>31){
+        issues.push('Not updated in '+days+' days (since '+fmtDate(a.modified.substring(0,10))+'). Please review and update.');
+      }
+    }
+  }
+  return issues;
+}
+
 function render(){
   var items=getFiltered();
   var body=document.getElementById('mainBody');
@@ -912,8 +945,11 @@ function render(){
     }else if(a.level==='L1'){
       actionBtns+='<button class="btn btn-sm btn-breakout" onclick="convertL1ToStandalone('+a.id+')" title="Convert to a standalone activity (deletes all L2 sub-activities)">&#8594; SA</button>';
     }
+    // Date / status consistency flag
+    var issues=dateStatusIssues(a);
+    var flagBadge=issues.length?'<span class="warn-badge" onclick="openEditModal('+a.id+')" style="cursor:pointer;margin-left:5px;padding:1px 4px;" title="'+escHtml(issues.join('\n'))+'">&#9888;</span>':'';
     tr.innerHTML='<td><span class="level-badge '+levelCls+'">'+a.level+'</span></td>'+
-      '<td class="wrap-cell" style="font-weight:500;">'+escHtml(a.title)+'</td>'+
+      '<td class="wrap-cell" style="font-weight:500;">'+escHtml(a.title)+flagBadge+'</td>'+
       '<td class="nowrap-cell">'+escHtml(a.area)+'</td><td class="nowrap-cell">'+escHtml(a.asset)+'</td>'+
       '<td class="nowrap-cell">'+escHtml(a.vessel)+'</td>'+
       '<td class="nowrap-cell"><span class="grp-dot" style="background:'+col+';"></span>'+escHtml(a.grouping)+'</td>'+
