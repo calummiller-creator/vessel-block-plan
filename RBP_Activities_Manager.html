@@ -236,7 +236,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 <div class="l2-page" id="l2Page">
   <div class="l2-page-header">
     <div>
-      <button class="btn btn-back" onclick="closeL2Page()">&#8592; Back</button>
+      <button class="btn btn-back" onclick="backFromL2()">&#8592; Back</button>
       <h2 id="l2Title" style="margin-top:6px;"></h2>
       <div class="sub" id="l2Sub"></div>
       <div class="meta" id="l2Meta"></div>
@@ -291,7 +291,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
       <span style="font-size:9px;color:var(--text-tri);line-height:1.4;">Required per line: Title, Vessel, MMSI (0 if no vessel), Duration, SPA, Org, Status, P/E. Fill in any missing items or delete the line before saving.</span>
     </div>
     <div style="display:flex;gap:8px;">
-      <button class="btn" onclick="closeL2Page()">Cancel</button>
+      <button class="btn" onclick="backFromL2()">Cancel</button>
       <button class="btn btn-primary" onclick="saveL2()">Save changes</button>
     </div>
   </div>
@@ -1008,9 +1008,19 @@ function setTab(t){
 }
 
 // L2 Page
+var l2Original=null;   // deep copy of the L2 rows as loaded (for discard/restore)
+var l2Baseline='';     // signature of L2 rows at open (incl. any auto-added starter) for dirty check
+
+function l2Sig(arr){
+  return JSON.stringify((arr||[]).map(function(l){
+    return [l.title||'',l.subType||'',l.area||'',l.asset||'',l.field||'',String(l.duration||''),l.from||'',l.to||'',l.vessel||'',String(l.mmsi||''),l.spa||'',l.grouping||'',l.org||'',l.status||'',l.pe||''];
+  }));
+}
+
 function openL2Page(id){
   currentL1=activities.find(function(a){return a.id===id;});
   if(!currentL1)return;
+  l2Original=JSON.parse(JSON.stringify(currentL1.l2||[]));
   document.getElementById('l2Title').textContent=currentL1.title;
   document.getElementById('l2Sub').textContent=(currentL1.vessel||'No vessel')+' \u2014 '+currentL1.grouping;
   document.getElementById('l2Meta').innerHTML='<span>'+escHtml(currentL1.spa)+'</span><span>'+escHtml(currentL1.org)+'</span><span>'+fmtDateFull(currentL1.from)+' \u2192 '+fmtDateFull(currentL1.to)+'</span>';
@@ -1018,6 +1028,7 @@ function openL2Page(id){
   if(currentL1.level==='L1'&&(!currentL1.l2||currentL1.l2.length===0)){
     addL2Row();
   }
+  l2Baseline=l2Sig(currentL1.l2);
   document.getElementById('l2Page').classList.add('open');
 }
 
@@ -1025,7 +1036,39 @@ function closeL2Page(){
   document.getElementById('l2Page').classList.remove('open');
   document.getElementById('pasteArea').classList.remove('show');
   currentL1=null;
+  l2Original=null;l2Baseline='';
   render();
+}
+
+function backFromL2(){
+  var dirty=currentL1&&(l2Sig(currentL1.l2)!==l2Baseline);
+  if(!dirty){
+    // No real changes (or only an untouched auto-added row) - drop any phantom row and close
+    if(currentL1&&l2Original)currentL1.l2=JSON.parse(JSON.stringify(l2Original));
+    closeL2Page();
+    return;
+  }
+  var ov=document.createElement('div');
+  ov.className='modal-overlay';
+  ov.id='l2ExitOverlay';
+  ov.style.display='flex';
+  ov.innerHTML='<div class="modal" style="max-width:430px;">'+
+    '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Unsaved changes</div>'+
+    '<div style="font-size:12px;color:var(--text-sec);line-height:1.5;margin-bottom:16px;">You have changes to this campaign that haven\u2019t been saved to SharePoint. What would you like to do?</div>'+
+    '<div style="display:flex;flex-direction:column;gap:8px;">'+
+    '<button class="btn btn-primary" id="l2ExitSave">Save &amp; exit</button>'+
+    '<button class="btn btn-breakout" id="l2ExitDiscard">Discard changes &amp; exit</button>'+
+    '<button class="btn" id="l2ExitCancel">Cancel \u2014 stay here</button>'+
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('l2ExitSave').onclick=function(){ov.remove();saveL2();};
+  document.getElementById('l2ExitDiscard').onclick=function(){ov.remove();discardL2AndClose();};
+  document.getElementById('l2ExitCancel').onclick=function(){ov.remove();};
+}
+
+function discardL2AndClose(){
+  if(currentL1&&l2Original)currentL1.l2=JSON.parse(JSON.stringify(l2Original));
+  closeL2Page();
 }
 
 function renderL2(){
