@@ -286,7 +286,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
     </table>
   </div>
   <div class="l2-footer">
-    <span class="auto-dates">L1 dates auto-update from L2 range</span>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      <span class="auto-dates">L1 dates auto-update from L2 range</span>
+      <span style="font-size:9px;color:var(--text-tri);line-height:1.4;">Required per line: Title, Vessel, MMSI (0 if no vessel), Duration, SPA, Org, Status, P/E. Fill in any missing items or delete the line before saving.</span>
+    </div>
     <div style="display:flex;gap:8px;">
       <button class="btn" onclick="closeL2Page()">Cancel</button>
       <button class="btn btn-primary" onclick="saveL2()">Save changes</button>
@@ -1257,6 +1260,38 @@ function processPaste(){
 function saveL2(){
   recalcL2Dates(0);
   if(!currentL1)return;
+
+  // Required-field validation per L2 line (values may default from the L1 header).
+  // Dates are calculated, so Duration is the required date input rather than From/To.
+  function l2blank(v){return v===null||v===undefined||(typeof v==='string'&&v.trim()==='');}
+  var l2Errors=[];
+  currentL1.l2.forEach(function(l,i){
+    var miss=[];
+    var eVessel=l.vessel||currentL1.vessel;
+    var eMmsi=(!l2blank(l.mmsi))?l.mmsi:currentL1.mmsi; // 0 is a valid MMSI (no vessel)
+    var eSpa=l.spa||currentL1.spa;
+    var eOrg=l.org||currentL1.org;
+    var eStatus=l.status||currentL1.status;
+    var ePe=l.pe||currentL1.pe;
+    var dur=Number(l.duration);
+    if(l2blank(l.title))miss.push('Title');
+    if(l2blank(eVessel))miss.push('Vessel');
+    if(l2blank(eMmsi))miss.push('MMSI (enter 0 if no vessel)');
+    if(!(dur>0))miss.push('Duration');
+    if(l2blank(eSpa))miss.push('SPA');
+    if(l2blank(eOrg))miss.push('Organisation');
+    if(l2blank(eStatus))miss.push('Status');
+    if(l2blank(ePe))miss.push('Planned/Emergent');
+    if(miss.length>0){
+      var label=(l.title&&String(l.title).trim())?'"'+String(l.title).trim()+'"':('Line '+(i+1));
+      l2Errors.push('\u2022 '+label+' \u2014 missing: '+miss.join(', '));
+    }
+  });
+  if(l2Errors.length>0){
+    alert('Some activities are missing required information:\n\n'+l2Errors.join('\n')+'\n\nPlease fill in the missing items, or delete the line, before saving.');
+    return;
+  }
+
   // Resolve lookup IDs for each L2 row
   var ids=window._lookupIds||{region:{},area:{},asset:{},field:{}};
   var spaMap=window._spaIdMap||{};
